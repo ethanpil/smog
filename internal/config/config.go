@@ -1,6 +1,12 @@
 package config
 
 import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+
 	"github.com/spf13/viper"
 )
 
@@ -47,4 +53,34 @@ func LoadConfig(path string) (config Config, err error) {
 
 	err = viper.Unmarshal(&config)
 	return
+}
+
+// Create creates a default config file.
+func Create() error {
+	var dir string
+	switch runtime.GOOS {
+	case "windows":
+		dir = os.Getenv("ProgramData")
+		if dir == "" {
+			return errors.New("ProgramData environment variable not set")
+		}
+		dir = filepath.Join(dir, "smog")
+	case "linux":
+		dir = "/etc/smog"
+	case "darwin":
+		dir = "/Library/Application Support/smog"
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	configFile := filepath.Join(dir, "smog.conf")
+	if _, err := os.Stat(configFile); err == nil {
+		return fmt.Errorf("config file already exists: %s", configFile)
+	}
+
+	return os.WriteFile(configFile, []byte(defaultConfig), 0644)
 }
