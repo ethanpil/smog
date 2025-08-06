@@ -1,1 +1,0 @@
-As a senior expert Go engineering manager, break this plan down into a set of tasks from empty repo to full blown bug-free application. Each task should be a small single commit building on the previous work.
