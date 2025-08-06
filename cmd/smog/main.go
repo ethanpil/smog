@@ -12,6 +12,7 @@ var rootCmd = &cobra.Command{
 	Short: "smog is a simple smtp relay for gmail",
 	Long:  `A fast and simple smtp relay for gmail that can be configured with a single command.`,
 	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, args []string) {
 		// Do nothing
 	},
 }
