@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/ethanpil/smog/internal/config"
+	"github.com/ethanpil/smog/internal/log"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +22,13 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "starts the smtp relay server",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("serve command called")
+		cfg, err := config.LoadConfig("")
+		if err != nil {
+			fmt.Println("failed to load config", err)
+			os.Exit(1)
+		}
+		logger := log.New(cfg.LogLevel)
+		logger.Info("starting smog smtp relay")
 	},
 }
 
@@ -42,8 +49,14 @@ var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "creates a default config file",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := config.Create(); err != nil {
-			fmt.Println(err)
+		cfg, err := config.LoadConfig("")
+		if err != nil {
+			fmt.Println("failed to load config", err)
+			os.Exit(1)
+		}
+		logger := log.New(cfg.LogLevel)
+		if err := config.Create(logger); err != nil {
+			logger.Error("failed to create config file", "err", err)
 			os.Exit(1)
 		}
 	},

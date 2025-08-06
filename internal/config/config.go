@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -56,7 +57,7 @@ func LoadConfig(path string) (config Config, err error) {
 }
 
 // Create creates a default config file.
-func Create() error {
+func Create(logger *slog.Logger) error {
 	var dir string
 	switch runtime.GOOS {
 	case "windows":
@@ -73,14 +74,18 @@ func Create() error {
 		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
 
+	logger.Debug("creating config directory", "dir", dir)
 	if err := os.MkdirAll(dir, 0755); err != nil {
+		logger.Error("failed to create config directory", "err", err)
 		return err
 	}
 
 	configFile := filepath.Join(dir, "smog.conf")
 	if _, err := os.Stat(configFile); err == nil {
+		logger.Warn("config file already exists", "configFile", configFile)
 		return fmt.Errorf("config file already exists: %s", configFile)
 	}
 
+	logger.Debug("writing default config file", "configFile", configFile)
 	return os.WriteFile(configFile, []byte(defaultConfig), 0644)
 }
