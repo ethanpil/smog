@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -26,7 +27,8 @@ func TestCreate(t *testing.T) {
 	}
 
 	// Call the Create function
-	if err := Create(); err != nil {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	if err := Create(logger); err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
 
@@ -47,4 +49,5 @@ func TestCreate(t *testing.T) {
 
 	// Clean up the created file
 	os.Remove(configFile)
+	os.Remove("smog.conf")
 }
