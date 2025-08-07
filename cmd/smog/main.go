@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ethanpil/smog/internal/auth"
 	"github.com/ethanpil/smog/internal/config"
 	"github.com/ethanpil/smog/internal/log"
 	"github.com/spf13/cobra"
@@ -34,9 +35,31 @@ var serveCmd = &cobra.Command{
 
 var authCmd = &cobra.Command{
 	Use:   "auth",
+	Short: "manages gmail authentication",
+}
+
+var loginCmd = &cobra.Command{
+	Use:   "login",
 	Short: "authenticates with gmail",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("auth command called")
+		cfg, err := config.LoadConfig("")
+		if err != nil {
+			fmt.Println("failed to load config", err)
+			os.Exit(1)
+		}
+		logger := log.New(cfg.LogLevel)
+		if err := auth.Login(logger, &cfg); err != nil {
+			logger.Error("failed to authenticate", "err", err)
+			os.Exit(1)
+		}
+	},
+}
+
+var revokeCmd = &cobra.Command{
+	Use:   "revoke",
+	Short: "revokes gmail authentication",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("auth revoke command called")
 	},
 }
 
@@ -49,12 +72,7 @@ var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "creates a default config file",
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg, err := config.LoadConfig("")
-		if err != nil {
-			fmt.Println("failed to load config", err)
-			os.Exit(1)
-		}
-		logger := log.New(cfg.LogLevel)
+		logger := log.New("Info")
 		if err := config.Create(logger); err != nil {
 			logger.Error("failed to create config file", "err", err)
 			os.Exit(1)
@@ -63,6 +81,8 @@ var createCmd = &cobra.Command{
 }
 
 func init() {
+	authCmd.AddCommand(loginCmd)
+	authCmd.AddCommand(revokeCmd)
 	configCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(authCmd)
