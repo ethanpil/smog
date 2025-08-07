@@ -22,6 +22,7 @@ profile.cov
 
 # Go workspace file
 go.work
+smog
 go.work.sum
 
 # env file
