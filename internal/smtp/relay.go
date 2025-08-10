@@ -1,6 +1,7 @@
 package smtp
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"log/slog"
@@ -24,8 +25,11 @@ func (be *Backend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 
 // A Session is returned after EHLO.
 type Session struct {
-	log *slog.Logger
-	cfg *config.Config
+	log  *slog.Logger
+	cfg  *config.Config
+	from string
+	to   []string
+	data bytes.Buffer
 }
 
 // Login is called by the go-smtp library to authenticate a user.
@@ -55,23 +59,34 @@ func (s *Session) AuthPlain(username, password string) error {
 }
 
 func (s *Session) Mail(from string, opts *smtp.MailOptions) error {
-	s.log.Info("MAIL FROM:", "from", from)
+	s.log.Info("MAIL FROM", "from", from)
+	s.Reset()
+	s.from = from
 	return nil
 }
 
 func (s *Session) Rcpt(to string, opts *smtp.RcptOptions) error {
-	s.log.Info("RCPT TO:", "to", to)
+	s.log.Info("RCPT TO", "to", to)
+	s.to = append(s.to, to)
 	return nil
 }
 
 func (s *Session) Data(r io.Reader) error {
-	if _, err := io.Copy(io.Discard, r); err != nil {
+	s.log.Debug("DATA received")
+	if size, err := io.Copy(&s.data, r); err != nil {
+		s.log.Error("error reading data", "error", err)
 		return err
+	} else {
+		s.log.Info("message received", "size", size)
 	}
 	return nil
 }
 
-func (s *Session) Reset() {}
+func (s *Session) Reset() {
+	s.from = ""
+	s.to = nil
+	s.data.Reset()
+}
 
 func (s *Session) Logout() error {
 	return nil
