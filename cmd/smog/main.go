@@ -117,7 +117,7 @@ var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "creates a default config file",
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := log.New("Info")
+		logger := log.New("Info", "") // Log to console
 		if err := config.Create(logger); err != nil {
 			logger.Error("failed to create config file", "err", err)
 			os.Exit(1)
