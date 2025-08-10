@@ -31,3 +31,14 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Build artifacts
+dist/
+
+# Log files
+smog_run.log
+
+# Credentials and tokens
+credentials.json
+token.json
+smog.conf
