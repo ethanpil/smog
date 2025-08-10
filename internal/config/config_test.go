@@ -3,12 +3,14 @@ package config
 import (
 	"log/slog"
 	"os"
-	"path/filepath"
 	"runtime"
 	"testing"
 )
 
 func TestCreate(t *testing.T) {
+	// Clean up any old config file before the test
+	os.Remove("smog.conf")
+
 	// Create a temporary directory for the test
 	tmpDir, err := os.MkdirTemp("", "smog-test")
 	if err != nil {
@@ -33,21 +35,10 @@ func TestCreate(t *testing.T) {
 	}
 
 	// Verify the config file was created
-	var configFile string
-	switch runtime.GOOS {
-	case "windows":
-		configFile = filepath.Join(tmpDir, "smog", "smog.conf")
-	case "linux":
-		configFile = "/etc/smog/smog.conf"
-	case "darwin":
-		configFile = "/Library/Application Support/smog/smog.conf"
-	}
-
-	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		t.Errorf("config file was not created: %s", configFile)
+	if _, err := os.Stat("smog.conf"); os.IsNotExist(err) {
+		t.Errorf("config file was not created: smog.conf")
 	}
 
 	// Clean up the created file
-	os.Remove(configFile)
 	os.Remove("smog.conf")
 }

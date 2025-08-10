@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ethanpil/smog/internal/app"
 	"github.com/ethanpil/smog/internal/auth"
 	"github.com/ethanpil/smog/internal/config"
 	"github.com/ethanpil/smog/internal/log"
@@ -29,7 +30,14 @@ var serveCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		logger := log.New(cfg.LogLevel)
-		logger.Info("starting smog smtp relay")
+
+		// ToDo: Add checks from AGENTS.md
+		// ToDo: Validate credentials from config
+
+		if err := app.Run(&cfg, logger); err != nil {
+			logger.Error("failed to start server", "err", err)
+			os.Exit(1)
+		}
 	},
 }
 
