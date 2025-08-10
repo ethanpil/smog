@@ -11,12 +11,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Global flags
+var (
+	configPath string
+	verbose    bool
+	silent     bool
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "smog",
 	Short: "smog is a simple smtp relay for gmail",
 	Long:  `A fast and simple smtp relay for gmail that can be configured with a single command.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Do nothing
+		// If no command is specified, default to the 'serve' command
+		serveCmd.Run(cmd, args)
 	},
 }
 
@@ -24,15 +32,44 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "starts the smtp relay server",
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg, err := config.LoadConfig("")
+		cfg, err := config.LoadConfig(configPath)
 		if err != nil {
-			fmt.Println("failed to load config", err)
+			fmt.Printf("Error: failed to load configuration: %v\n", err)
 			os.Exit(1)
 		}
-		logger := log.New(cfg.LogLevel)
 
-		// ToDo: Add checks from AGENTS.md
-		// ToDo: Validate credentials from config
+		// Override log level if global flags are set
+		logLevel := cfg.LogLevel
+		if verbose {
+			logLevel = "Verbose"
+		}
+		if silent {
+			logLevel = "Disabled"
+		}
+		logger := log.New(logLevel)
+
+		// --- Validation Checks (from AGENTS.md) ---
+
+		// 1. Check for default password
+		if cfg.SMTPPassword == "smoggmos" {
+			logger.Error("security risk: the SMTP password is set to the default value 'smoggmos'")
+			logger.Error("please change SMTPPassword in your configuration file before running the server")
+			os.Exit(1)
+		}
+
+		// 2. Check for authorization token
+		token, err := auth.LoadToken(logger, &cfg)
+		if err != nil {
+			logger.Error("failed to load google api token", "err", err)
+			os.Exit(1)
+		}
+		if token == nil {
+			logger.Error("google api token not found or invalid")
+			logger.Error("please run 'smog auth login' to authorize with google")
+			os.Exit(1)
+		}
+
+		logger.Info("configuration and credentials validated successfully")
 
 		if err := app.Run(&cfg, logger); err != nil {
 			logger.Error("failed to start server", "err", err)
@@ -50,12 +87,12 @@ var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "authenticates with gmail",
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg, err := config.LoadConfig("")
+		cfg, err := config.LoadConfig(configPath)
 		if err != nil {
-			fmt.Println("failed to load config", err)
+			fmt.Printf("Error: failed to load configuration: %v\n", err)
 			os.Exit(1)
 		}
-		logger := log.New(cfg.LogLevel)
+		logger := log.New(cfg.LogLevel) // Login command can be verbose on its own
 		if err := auth.Login(logger, &cfg); err != nil {
 			logger.Error("failed to authenticate", "err", err)
 			os.Exit(1)
@@ -89,6 +126,12 @@ var createCmd = &cobra.Command{
 }
 
 func init() {
+	// Add global flags
+	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "", "Path to configuration file")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
+	rootCmd.PersistentFlags().BoolVarP(&silent, "silent", "s", false, "Disable all console output except fatal errors")
+
+	// Add subcommands
 	authCmd.AddCommand(loginCmd)
 	authCmd.AddCommand(revokeCmd)
 	configCmd.AddCommand(createCmd)
@@ -99,7 +142,7 @@ func init() {
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		// Cobra prints the error, so we just need to exit
 		os.Exit(1)
 	}
 }

@@ -2,34 +2,43 @@ package smtp
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"log/slog"
 
 	"github.com/emersion/go-smtp"
 	"github.com/ethanpil/smog/internal/config"
+	"github.com/ethanpil/smog/internal/gmail"
+	"golang.org/x/oauth2"
 )
 
 // The Backend implements SMTP server methods.
 type Backend struct {
-	Cfg *config.Config
-	Log *slog.Logger
+	Cfg         *config.Config
+	Log         *slog.Logger
+	GmailClient gmail.Service
+	Token       *oauth2.Token
 }
 
 func (be *Backend) NewSession(c *smtp.Conn) (smtp.Session, error) {
 	return &Session{
-		log: be.Log,
-		cfg: be.Cfg,
+		log:         be.Log,
+		cfg:         be.Cfg,
+		gmailClient: be.GmailClient,
+		token:       be.Token,
 	}, nil
 }
 
 // A Session is returned after EHLO.
 type Session struct {
-	log  *slog.Logger
-	cfg  *config.Config
-	from string
-	to   []string
-	data bytes.Buffer
+	log         *slog.Logger
+	cfg         *config.Config
+	gmailClient gmail.Service
+	token       *oauth2.Token
+	from        string
+	to          []string
+	data        bytes.Buffer
 }
 
 // Login is called by the go-smtp library to authenticate a user.
@@ -73,12 +82,21 @@ func (s *Session) Rcpt(to string, opts *smtp.RcptOptions) error {
 
 func (s *Session) Data(r io.Reader) error {
 	s.log.Debug("DATA received")
-	if size, err := io.Copy(&s.data, r); err != nil {
-		s.log.Error("error reading data", "error", err)
+	if _, err := io.Copy(&s.data, r); err != nil {
+		s.log.Error("error reading data stream", "err", err)
 		return err
-	} else {
-		s.log.Info("message received", "size", size)
 	}
+
+	s.log.Info("message data received, preparing to send via gmail", "from", s.from, "to", s.to)
+
+	ctx := context.Background()
+	if _, err := s.gmailClient.Send(ctx, s.token, s.data.Bytes()); err != nil {
+		s.log.Error("failed to send email via gmail", "err", err)
+		// Return a generic error to the SMTP client
+		return errors.New("failed to relay message")
+	}
+
+	s.log.Info("message relayed successfully", "from", s.from, "to", s.to)
 	return nil
 }
 

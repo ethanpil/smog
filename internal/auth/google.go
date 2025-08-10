@@ -28,7 +28,7 @@ func Login(logger *slog.Logger, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("unable to parse client secret file to config: %v", err)
 	}
-	client, err := getClient(logger, oauthConfig, cfg)
+	client, err := getClientForLogin(logger, oauthConfig, cfg)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve client: %v", err)
 	}
@@ -47,11 +47,14 @@ func Login(logger *slog.Logger, cfg *config.Config) error {
 	return nil
 }
 
-// Retrieve a token, saves the token, then returns the generated client.
-func getClient(logger *slog.Logger, oauthConfig *oauth2.Config, cfg *config.Config) (*http.Client, error) {
+// getClientForLogin retrieves a token, saves the token, then returns the generated client.
+// This is used for the interactive login flow.
+func getClientForLogin(logger *slog.Logger, oauthConfig *oauth2.Config, cfg *config.Config) (*http.Client, error) {
 	tok, err := LoadToken(logger, cfg)
 	if err != nil {
-		return nil, err
+		// If there's an error loading the token (e.g., corrupted file),
+		// we can proceed to get a new one from the web.
+		logger.Warn("could not load existing token, will request a new one", "err", err)
 	}
 
 	if tok == nil {
@@ -67,6 +70,31 @@ func getClient(logger *slog.Logger, oauthConfig *oauth2.Config, cfg *config.Conf
 	}
 
 	return oauthConfig.Client(context.Background(), tok), nil
+}
+
+// GetClient returns an authenticated http.Client and the corresponding token.
+// It's used by the server at startup. It requires a valid, pre-existing token.
+func GetClient(logger *slog.Logger, cfg *config.Config) (*http.Client, *oauth2.Token, error) {
+	b, err := ioutil.ReadFile(cfg.GoogleCredentialsPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to read client secret file: %v", err)
+	}
+
+	oauthConfig, err := google.ConfigFromJSON(b, gmail.GmailSendScope)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to parse client secret file to config: %v", err)
+	}
+
+	tok, err := LoadToken(logger, cfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load token: %w", err)
+	}
+	if tok == nil {
+		// This case is handled by the startup validation in main.go, but is here for safety.
+		return nil, nil, fmt.Errorf("token not found, please run 'smog auth login'")
+	}
+
+	return oauthConfig.Client(context.Background(), tok), tok, nil
 }
 
 // Request a token from the web, then returns the retrieved token.
