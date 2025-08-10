@@ -1,20 +1,34 @@
 package smtp
 
 import (
+	"context"
 	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/ethanpil/smog/internal/config"
+	"github.com/ethanpil/smog/internal/gmail"
+	"golang.org/x/oauth2"
+	gapi "google.golang.org/api/gmail/v1"
 )
 
 func TestSession_MailRcptData(t *testing.T) {
-	session := &Session{
-		log: slog.Default(),
-		cfg: &config.Config{},
+	// 1. Setup
+	mockGmail := &gmail.MockService{
+		SendFunc: func(ctx context.Context, token *oauth2.Token, rawEmail []byte) (*gapi.Message, error) {
+			// In a real test, you might inspect the rawEmail content
+			return &gapi.Message{Id: "test-message-id"}, nil
+		},
 	}
 
-	// 1. Test Mail
+	session := &Session{
+		log:         slog.Default(),
+		cfg:         &config.Config{},
+		gmailClient: mockGmail,
+		token:       &oauth2.Token{}, // Dummy token
+	}
+
+	// 2. Test Mail
 	from := "sender@example.com"
 	err := session.Mail(from, nil)
 	if err != nil {

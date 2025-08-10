@@ -12,6 +12,11 @@ import (
 	"google.golang.org/api/option"
 )
 
+// Service is the interface for the Gmail client.
+type Service interface {
+	Send(ctx context.Context, token *oauth2.Token, rawEmail []byte) (*gmail.Message, error)
+}
+
 // Client is a wrapper around the Gmail API client.
 type Client struct {
 	logger *slog.Logger
@@ -19,7 +24,7 @@ type Client struct {
 }
 
 // New creates a new Gmail client.
-func New(logger *slog.Logger, client *http.Client) *Client {
+func New(logger *slog.Logger, client *http.Client) Service {
 	return &Client{
 		logger: logger,
 		client: client,

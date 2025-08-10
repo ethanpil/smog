@@ -3,11 +3,18 @@ module github.com/ethanpil/smog
 go 1.24.3
 
 require (
+	github.com/emersion/go-smtp v0.24.0
+	github.com/spf13/cobra v1.9.1
+	github.com/spf13/viper v1.20.1
+	golang.org/x/oauth2 v0.30.0
+	google.golang.org/api v0.246.0
+)
+
+require (
 	cloud.google.com/go/auth v0.16.3 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6 // indirect
-	github.com/emersion/go-smtp v0.24.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -23,9 +30,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
-	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
-	github.com/spf13/viper v1.20.1 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
@@ -36,10 +41,8 @@ require (
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/net v0.42.0 // indirect
-	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
-	google.golang.org/api v0.246.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250728155136-f173205681a0 // indirect
 	google.golang.org/grpc v1.74.2 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
