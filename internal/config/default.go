@@ -25,10 +25,10 @@ GoogleCredentialsPath = ""
 GoogleTokenPath = ""
 
 # SMTPUser: The username that SMTP clients must use to authenticate.
-SMTPUser = "user"
+SMTPUser = "smog"
 
 # SMTPPassword: The password that SMTP clients must use.
-SMTPPassword = "password"
+SMTPPassword = "smoggmos"
 
 # SMTPPort: The TCP port for the SMTP server to listen on.
 SMTPPort = 2525
