@@ -3,6 +3,9 @@ package app
 import (
 	"fmt"
 	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/emersion/go-smtp"
@@ -38,6 +41,44 @@ func Run(cfg *config.Config, logger *slog.Logger) error {
 	s.MaxRecipients = 50
 	s.AllowInsecureAuth = true
 
-	logger.Info("starting smog smtp relay", "address", s.Addr)
-	return s.ListenAndServe()
+	// Channel to hold errors from the server goroutine
+	serverErrors := make(chan error, 1)
+
+	// Goroutine to run the server
+	go func() {
+		logger.Info("starting smog smtp relay", "address", s.Addr)
+		// `ListenAndServe` blocks until an error occurs. `ErrServerClosed` is expected
+		// on a graceful shutdown, so we ignore it.
+		if err := s.ListenAndServe(); err != nil && err != smtp.ErrServerClosed {
+			serverErrors <- fmt.Errorf("smtp server error: %w", err)
+		}
+	}()
+
+	// Wait for an interrupt signal or a server error
+	logger.Info("smog is running. press ctrl-c to exit.")
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case err := <-serverErrors:
+		// This case handles errors during server startup or runtime.
+		logger.Error("server failed to start or encountered a fatal error", "err", err)
+		// Attempt a clean shutdown anyway, logging any further errors.
+		if closeErr := s.Close(); closeErr != nil {
+			logger.Error("failed to close smtp server during error handling", "err", closeErr)
+		}
+		return err // Return the original error that caused the server to fail.
+
+	case sig := <-quit:
+		// This case handles a graceful shutdown signal from the OS.
+		logger.Info("shutting down smog smtp relay", "signal", sig.String())
+		if err := s.Close(); err != nil {
+			// This error means the graceful shutdown failed.
+			return fmt.Errorf("failed to gracefully shutdown smtp server: %w", err)
+		}
+		logger.Info("smog smtp relay shut down gracefully")
+	}
+
+	return nil
 }

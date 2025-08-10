@@ -13,8 +13,8 @@ const (
 	LevelError = "Error"
 )
 
-// New creates a new logger with the given log level.
-func New(level string) *slog.Logger {
+// New creates a new logger with the given log level and path.
+func New(level, path string) *slog.Logger {
 	var logLevel slog.Level
 	switch level {
 	case LevelDebug:
@@ -29,7 +29,21 @@ func New(level string) *slog.Logger {
 		logLevel = slog.LevelInfo
 	}
 
-	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	// Default to stdout
+	w := os.Stdout
+	if path != "" {
+		// If a path is provided, try to open the file for writing.
+		// The file is created if it does not exist.
+		// New entries are appended to the file.
+		file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+		if err == nil {
+			w = file
+		}
+		// If we can't open the file, we'll just log to stdout.
+		// We could also log an error message to stdout here.
+	}
+
+	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{
 		Level: logLevel,
 	}))
 }

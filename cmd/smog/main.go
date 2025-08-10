@@ -46,7 +46,7 @@ var serveCmd = &cobra.Command{
 		if silent {
 			logLevel = "Disabled"
 		}
-		logger := log.New(logLevel)
+		logger := log.New(logLevel, cfg.LogPath)
 
 		// --- Validation Checks (from AGENTS.md) ---
 
@@ -92,7 +92,7 @@ var loginCmd = &cobra.Command{
 			fmt.Printf("Error: failed to load configuration: %v\n", err)
 			os.Exit(1)
 		}
-		logger := log.New(cfg.LogLevel) // Login command can be verbose on its own
+		logger := log.New(cfg.LogLevel, cfg.LogPath) // Login command can be verbose on its own
 		if err := auth.Login(logger, &cfg); err != nil {
 			logger.Error("failed to authenticate", "err", err)
 			os.Exit(1)
