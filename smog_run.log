@@ -1,0 +1,7 @@
+time=2025-08-10T17:17:31.996Z level=INFO msg="checking for token" path=token.json
+time=2025-08-10T17:17:31.996Z level=INFO msg="token file found"
+time=2025-08-10T17:17:31.996Z level=INFO msg="configuration and credentials validated successfully"
+time=2025-08-10T17:17:31.996Z level=INFO msg="checking for token" path=token.json
+time=2025-08-10T17:17:31.996Z level=INFO msg="token file found"
+time=2025-08-10T17:17:31.996Z level=INFO msg="smog is running. press ctrl-c to exit."
+time=2025-08-10T17:17:31.996Z level=INFO msg="starting smog smtp relay" address=:2525
