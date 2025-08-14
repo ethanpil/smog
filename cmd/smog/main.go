@@ -38,15 +38,14 @@ var serveCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Override log level if global flags are set
+		// Determine log level from config and flags
 		logLevel := cfg.LogLevel
-		if verbose {
-			logLevel = "Verbose"
-		}
 		if silent {
-			logLevel = "Disabled"
+			logLevel = log.LevelDisabled
 		}
-		logger := log.New(logLevel, cfg.LogPath)
+		// The -v flag now controls verbosity at the logger level,
+		// which also logs to console.
+		logger := log.New(logLevel, cfg.LogPath, verbose)
 
 		// --- Validation Checks (from AGENTS.md) ---
 
@@ -92,7 +91,8 @@ var loginCmd = &cobra.Command{
 			fmt.Printf("Error: failed to load configuration: %v\n", err)
 			os.Exit(1)
 		}
-		logger := log.New(cfg.LogLevel, cfg.LogPath) // Login command can be verbose on its own
+		// Auth command should be verbose by default to guide the user.
+		logger := log.New(log.LevelVerbose, cfg.LogPath, true)
 		if err := auth.Login(logger, &cfg); err != nil {
 			logger.Error("failed to authenticate", "err", err)
 			os.Exit(1)
@@ -117,7 +117,8 @@ var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "creates a default config file",
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := log.New("Info", "") // Log to console
+		// Create command should always log to console.
+		logger := log.New(log.LevelMinimal, "", true)
 		if err := config.Create(logger); err != nil {
 			logger.Error("failed to create config file", "err", err)
 			os.Exit(1)
@@ -128,8 +129,8 @@ var createCmd = &cobra.Command{
 func init() {
 	// Add global flags
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "", "Path to configuration file")
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
-	rootCmd.PersistentFlags().BoolVarP(&silent, "silent", "s", false, "Disable all console output except fatal errors")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging to console")
+	rootCmd.PersistentFlags().BoolVarP(&silent, "silent", "s", false, "Disable all logging")
 
 	// Add subcommands
 	authCmd.AddCommand(loginCmd)
