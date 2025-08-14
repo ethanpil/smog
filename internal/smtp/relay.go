@@ -109,9 +109,31 @@ func (s *Session) Rcpt(to string, opts *smtp.RcptOptions) error {
 
 func (s *Session) Data(r io.Reader) error {
 	s.log.Debug("DATA received")
-	if _, err := io.Copy(&s.data, r); err != nil {
-		s.log.Error("error reading data stream", "err", err)
-		return err
+
+	// Enforce message size limit.
+	if s.cfg.MessageSizeLimitMB > 0 {
+		limitBytes := int64(s.cfg.MessageSizeLimitMB) * 1024 * 1024
+		// Use a LimitReader to avoid reading the entire message into memory if it's too large.
+		// We read up to limitBytes + 1 to see if the message is over the limit.
+		lr := io.LimitReader(r, limitBytes+1)
+		if _, err := io.Copy(&s.data, lr); err != nil {
+			s.log.Error("error reading data stream", "err", err)
+			return err
+		}
+
+		if int64(s.data.Len()) > limitBytes {
+			s.log.Warn("message rejected: size exceeds limit", "from", s.from, "to", s.to, "size_bytes", s.data.Len(), "limit_bytes", limitBytes)
+			return &smtp.SMTPError{
+				Code:    552,
+				Message: fmt.Sprintf("Message size exceeds fixed limit of %d MB", s.cfg.MessageSizeLimitMB),
+			}
+		}
+	} else {
+		// If no limit is set, read the whole thing.
+		if _, err := io.Copy(&s.data, r); err != nil {
+			s.log.Error("error reading data stream", "err", err)
+			return err
+		}
 	}
 
 	s.log.Info("message data received, preparing to send via gmail", "from", s.from, "to", s.to)
