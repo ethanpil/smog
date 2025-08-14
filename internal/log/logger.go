@@ -1,49 +1,63 @@
 package log
 
 import (
+	"io"
 	"log/slog"
 	"os"
 )
 
-// Log levels
+// Log levels from config
 const (
-	LevelDebug = "Debug"
-	LevelInfo  = "Info"
-	LevelWarn  = "Warn"
-	LevelError = "Error"
+	LevelDisabled = "Disabled"
+	LevelMinimal  = "Minimal"
+	LevelVerbose  = "Verbose"
 )
 
-// New creates a new logger with the given log level and path.
-func New(level, path string) *slog.Logger {
+// New creates a new logger based on the configuration.
+// It supports structured logging (JSON), file output, and a verbose flag
+// to enable simultaneous console output.
+func New(level, path string, verbose bool) *slog.Logger {
 	var logLevel slog.Level
 	switch level {
-	case LevelDebug:
+	case LevelDisabled:
+		// Discard all logs.
+		return slog.New(slog.NewJSONHandler(io.Discard, nil))
+	case LevelMinimal:
+		logLevel = slog.LevelInfo
+	case LevelVerbose:
 		logLevel = slog.LevelDebug
-	case LevelInfo:
-		logLevel = slog.LevelInfo
-	case LevelWarn:
-		logLevel = slog.LevelWarn
-	case LevelError:
-		logLevel = slog.LevelError
 	default:
-		logLevel = slog.LevelInfo
+		logLevel = slog.LevelInfo // Default to Minimal.
 	}
 
-	// Default to stdout
-	w := os.Stdout
+	var writers []io.Writer
+
+	// Add file writer if a path is specified.
 	if path != "" {
-		// If a path is provided, try to open the file for writing.
-		// The file is created if it does not exist.
-		// New entries are appended to the file.
 		file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 		if err == nil {
-			w = file
+			writers = append(writers, file)
+		} else {
+			// Fallback to stderr for the error message, as the logger isn't fully set up.
+			slog.New(slog.NewTextHandler(os.Stderr, nil)).Error("failed to open log file", "path", path, "err", err)
 		}
-		// If we can't open the file, we'll just log to stdout.
-		// We could also log an error message to stdout here.
 	}
 
-	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{
+	// Add console writer for verbose mode or if no log path is set.
+	if verbose || path == "" {
+		writers = append(writers, os.Stdout)
+	}
+
+	// If there are no writers, discard logs. This can happen if LogLevel is not
+	// "Disabled" but file logging fails and verbose is false.
+	if len(writers) == 0 {
+		return slog.New(slog.NewJSONHandler(io.Discard, nil))
+	}
+
+	// Combine writers if necessary.
+	multiWriter := io.MultiWriter(writers...)
+
+	return slog.New(slog.NewJSONHandler(multiWriter, &slog.HandlerOptions{
 		Level: logLevel,
 	}))
 }
