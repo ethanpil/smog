@@ -27,6 +27,7 @@ jobs:
         with:
           name: smog-linux
           path: dist/
+          retention-days: 14
 
   build-macos:
     runs-on: macos-latest
@@ -47,6 +48,7 @@ jobs:
         with:
           name: smog-macos
           path: dist/
+          retention-days: 14
 
   build-windows:
     runs-on: windows-latest
@@ -67,3 +69,4 @@ jobs:
         with:
           name: smog-windows
           path: dist/
+          retention-days: 14
