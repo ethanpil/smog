@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"net"
 
 	"github.com/emersion/go-smtp"
 	"github.com/ethanpil/smog/internal/config"
 	"github.com/ethanpil/smog/internal/gmail"
+	"github.com/ethanpil/smog/internal/netutil"
 	"golang.org/x/oauth2"
 )
 
@@ -22,11 +25,34 @@ type Backend struct {
 }
 
 func (be *Backend) NewSession(c *smtp.Conn) (smtp.Session, error) {
+	remoteAddr := c.Conn().RemoteAddr()
+	ipStr, _, err := net.SplitHostPort(remoteAddr.String())
+	if err != nil {
+		be.Log.Error("could not parse remote address", "remoteAddr", remoteAddr.String(), "err", err)
+		return nil, fmt.Errorf("internal server error: could not parse address")
+	}
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		be.Log.Error("could not parse IP from remote address", "ipStr", ipStr)
+		return nil, fmt.Errorf("internal server error: could not parse ip")
+	}
+
+	if !netutil.IsAllowed(be.Log, ip, be.Cfg.AllowedSubnets) {
+		be.Log.Warn("rejecting connection from disallowed IP", "remoteIP", ip.String())
+		return nil, &smtp.SMTPError{
+			Code:    554,
+			Message: "access denied",
+		}
+	}
+
+	be.Log.Debug("accepted connection", "remoteIP", ip.String())
+
 	return &Session{
 		log:         be.Log,
 		cfg:         be.Cfg,
 		gmailClient: be.GmailClient,
 		token:       be.Token,
+		clientIP:    ip.String(),
 	}, nil
 }
 
@@ -36,6 +62,7 @@ type Session struct {
 	cfg         *config.Config
 	gmailClient gmail.Service
 	token       *oauth2.Token
+	clientIP    string
 	from        string
 	to          []string
 	data        bytes.Buffer
@@ -90,13 +117,19 @@ func (s *Session) Data(r io.Reader) error {
 	s.log.Info("message data received, preparing to send via gmail", "from", s.from, "to", s.to)
 
 	ctx := context.Background()
-	if _, err := s.gmailClient.Send(ctx, s.token, s.data.Bytes()); err != nil {
+	sentMsg, err := s.gmailClient.Send(ctx, s.token, s.data.Bytes())
+	if err != nil {
 		s.log.Error("failed to send email via gmail", "err", err)
 		// Return a generic error to the SMTP client
 		return errors.New("failed to relay message")
 	}
 
-	s.log.Info("message relayed successfully", "from", s.from, "to", s.to)
+	s.log.Info("message relayed successfully",
+		"client_ip", s.clientIP,
+		"from", s.from,
+		"to", s.to,
+		"message_id", sentMsg.Id,
+	)
 	return nil
 }
 
