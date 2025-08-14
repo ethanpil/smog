@@ -23,7 +23,7 @@ jobs:
           ./scripts/build.sh linux
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: smog-linux
           path: dist/
@@ -43,7 +43,7 @@ jobs:
         run: ./scripts/build.sh darwin
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: smog-macos
           path: dist/
@@ -63,7 +63,7 @@ jobs:
         run: ./scripts/build.sh windows
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: smog-windows
           path: dist/
