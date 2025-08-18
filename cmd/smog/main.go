@@ -70,7 +70,7 @@ var serveCmd = &cobra.Command{
 
 		logger.Info("configuration and credentials validated successfully")
 
-		if err := app.Run(&cfg, logger); err != nil {
+		if err := app.Run(&cfg, logger, nil); err != nil {
 			logger.Error("failed to start server", "err", err)
 			os.Exit(1)
 		}
