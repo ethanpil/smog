@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ethanpil/smog/internal/config"
+	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/gmail/v1"
@@ -58,10 +60,16 @@ func getClientForLogin(logger *slog.Logger, oauthConfig *oauth2.Config, cfg *con
 	}
 
 	if tok == nil {
-		logger.Info("no token found, requesting one from the web")
-		tok, err = getTokenFromWeb(logger, oauthConfig)
+		logger.Info("no token found, attempting to get one")
+		// Try browser-based flow first
+		tok, err = getTokenFromBrowser(logger, oauthConfig)
 		if err != nil {
-			return nil, err
+			logger.Warn("could not get token from browser, falling back to manual mode", "err", err)
+			// Fallback to manual copy-paste flow
+			tok, err = getTokenFromWeb(logger, oauthConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get token manually: %w", err)
+			}
 		}
 		logger.Info("saving token to file")
 		if err := saveToken(logger, cfg.GoogleTokenPath, tok); err != nil {
@@ -97,11 +105,99 @@ func GetClient(logger *slog.Logger, cfg *config.Config) (*http.Client, *oauth2.T
 	return oauthConfig.Client(context.Background(), tok), tok, nil
 }
 
-// Request a token from the web, then returns the retrieved token.
-func getTokenFromWeb(logger *slog.Logger, config *oauth2.Config) (*oauth2.Token, error) {
+// getTokenFromBrowser attempts to automatically open a browser for OAuth authentication.
+func getTokenFromBrowser(logger *slog.Logger, config *oauth2.Config) (*oauth2.Token, error) {
+	// Use a fixed port as specified in AGENTS.md
+	const callbackPort = 53682
+	config.RedirectURL = fmt.Sprintf("http://127.0.0.1:%d", callbackPort)
+
+	// Create a channel to receive the authorization code
+	codeChan := make(chan string)
+	errChan := make(chan error)
+
+	// Setup a temporary HTTP server to handle the OAuth redirect
+	server := &http.Server{Addr: fmt.Sprintf(":%d", callbackPort)}
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Get the authorization code from the query parameters
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			logger.Error("oauth callback received no code")
+			fmt.Fprintln(w, "Error: Authorization code not found in request.")
+			errChan <- fmt.Errorf("authorization code not found")
+			return
+		}
+		// Send the code to the channel
+		codeChan <- code
+		// Respond to the browser
+		fmt.Fprintln(w, "Authentication successful! You can close this window now.")
+	})
+
+	// Start the server in a goroutine
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errChan <- fmt.Errorf("failed to start local server: %w", err)
+		}
+	}()
+
+	// Generate the authentication URL
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	logger.Info("Go to the following link in your browser then type the authorization code:", "url", authURL)
-	logger.Info("Enter authorization code: ")
+
+	// Try to open the URL in a browser
+	err := browser.OpenURL(authURL)
+	if err != nil {
+		logger.Warn("failed to open browser automatically", "err", err)
+		// If we can't open the browser, this flow has failed.
+		// We shut down the server and return an error, so the caller can fall back.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		server.Shutdown(ctx)
+		return nil, fmt.Errorf("could not open browser: %w", err)
+	}
+
+	logger.Info("Your browser has been opened to visit the Google authentication page.")
+	logger.Info("If your browser is on a different machine, please open the URL above.")
+	logger.Info("Waiting for authorization...")
+
+	// Wait for the authorization code or an error
+	select {
+	case code := <-codeChan:
+		// Shutdown the server once the code is received
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		server.Shutdown(ctx)
+
+		// Exchange the code for a token
+		tok, err := config.Exchange(context.Background(), code)
+		if err != nil {
+			return nil, fmt.Errorf("unable to retrieve token from web: %w", err)
+		}
+		return tok, nil
+	case err := <-errChan:
+		// Shutdown the server on error
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		server.Shutdown(ctx)
+		return nil, err
+	case <-time.After(5 * time.Minute): // Timeout after 5 minutes
+		// Shutdown the server on timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		server.Shutdown(ctx)
+		return nil, fmt.Errorf("timed out waiting for authorization code")
+	}
+}
+
+// getTokenFromWeb handles the manual, copy-paste based token retrieval.
+func getTokenFromWeb(logger *slog.Logger, config *oauth2.Config) (*oauth2.Token, error) {
+	config.RedirectURL = "urn:ietf:wg:oauth:2.0:oob"
+	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+
+	logger.Info("You are running in a headless environment or the browser could not be opened.")
+	logger.Info("Please follow these steps:")
+	logger.Info("1. Open this URL on any machine with a web browser:", "url", authURL)
+	logger.Info("2. Authenticate with Google and grant permissions.")
+	logger.Info("3. Google will show you an authorization code. Copy it.")
+	logger.Info("Enter the authorization code here:")
 
 	reader := bufio.NewReader(os.Stdin)
 	authCode, err := reader.ReadString('\n')
