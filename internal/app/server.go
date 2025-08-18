@@ -8,26 +8,41 @@ import (
 	"syscall"
 	"time"
 
+	"net/http"
+
 	"github.com/emersion/go-smtp"
 	"github.com/ethanpil/smog/internal/auth"
 	"github.com/ethanpil/smog/internal/config"
 	"github.com/ethanpil/smog/internal/gmail"
 	smog_smtp "github.com/ethanpil/smog/internal/smtp"
+	"golang.org/x/oauth2"
 )
 
-func Run(cfg *config.Config, logger *slog.Logger) error {
-	logger.Debug("getting google api client")
-	httpClient, token, err := auth.GetClient(logger, cfg)
-	if err != nil {
-		return fmt.Errorf("could not get google api client: %w", err)
-	}
+func Run(cfg *config.Config, logger *slog.Logger, gmailService gmail.Service) error {
+	var token *oauth2.Token
+	var err error
 
-	gmailClient := gmail.New(logger, httpClient)
+	// If a specific gmail service isn't provided, create the default one.
+	// This is the standard operational path.
+	if gmailService == nil {
+		logger.Debug("creating default google api client")
+		var httpClient *http.Client
+		httpClient, token, err = auth.GetClient(logger, cfg)
+		if err != nil {
+			return fmt.Errorf("could not get google api client: %w", err)
+		}
+		gmailService = gmail.New(logger, httpClient)
+	} else {
+		// If a gmail service (likely a mock) is provided, we still need a placeholder token
+		// for the backend, although it may not be used by the mock.
+		logger.Debug("using provided gmail service")
+		token = &oauth2.Token{AccessToken: "fake-test-token"}
+	}
 
 	be := &smog_smtp.Backend{
 		Cfg:         cfg,
 		Log:         logger,
-		GmailClient: gmailClient,
+		GmailClient: gmailService,
 		Token:       token,
 	}
 

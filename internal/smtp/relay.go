@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 
+	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
 	"github.com/ethanpil/smog/internal/config"
 	"github.com/ethanpil/smog/internal/gmail"
@@ -68,30 +69,36 @@ type Session struct {
 	data        bytes.Buffer
 }
 
-// Login is called by the go-smtp library to authenticate a user.
-// It handles both AUTH PLAIN and AUTH LOGIN.
-func (s *Session) Login(username, password string) error {
-	s.log.Info("AUTH attempt", "username", username)
-
-	// Per AGENTS.md, reject default password. This is a safety check;
-	// the main validation should be at startup.
-	if s.cfg.SMTPPassword == "smoggmos" {
-		s.log.Error("authentication failed: server is using the default insecure password")
-		return errors.New("authentication failed: server misconfiguration")
-	}
-
-	if username != s.cfg.SMTPUser || password != s.cfg.SMTPPassword {
-		s.log.Warn("authentication failed: invalid credentials", "username", username)
-		return errors.New("invalid username or password")
-	}
-
-	s.log.Info("AUTH successful", "username", username)
-	return nil
+// AuthMechanisms returns a slice of available auth mechanisms to satisfy the
+// go-smtp server for AUTH support.
+func (s *Session) AuthMechanisms() []string {
+	return []string{sasl.Plain}
 }
 
-// AuthPlain is a wrapper around Login to satisfy the go-smtp interface.
-func (s *Session) AuthPlain(username, password string) error {
-	return s.Login(username, password)
+// Auth is called to authenticate a user.
+func (s *Session) Auth(mech string) (sasl.Server, error) {
+	s.log.Info("AUTH attempt", "mechanism", mech)
+	if mech != sasl.Plain {
+		s.log.Warn("unsupported auth mechanism", "mechanism", mech)
+		return nil, errors.New("unsupported authentication mechanism")
+	}
+
+	return sasl.NewPlainServer(func(identity, username, password string) error {
+		// Per AGENTS.md, reject default password. This is a safety check;
+		// the main validation should be at startup.
+		if s.cfg.SMTPPassword == "smoggmos" {
+			s.log.Error("authentication failed: server is using the default insecure password")
+			return errors.New("authentication failed: server misconfiguration")
+		}
+
+		if username != s.cfg.SMTPUser || password != s.cfg.SMTPPassword {
+			s.log.Warn("authentication failed: invalid credentials", "username", username)
+			return errors.New("invalid username or password")
+		}
+
+		s.log.Info("AUTH successful", "username", username)
+		return nil
+	}), nil
 }
 
 func (s *Session) Mail(from string, opts *smtp.MailOptions) error {
