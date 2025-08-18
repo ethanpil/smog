@@ -4,6 +4,7 @@ go 1.24.3
 
 require (
 	github.com/emersion/go-smtp v0.24.0
+	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
 	golang.org/x/oauth2 v0.30.0
