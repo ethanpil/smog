@@ -5,6 +5,8 @@ import (
 	"os"
 	"runtime"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCreate(t *testing.T) {
@@ -41,4 +43,96 @@ func TestCreate(t *testing.T) {
 
 	// Clean up the created file
 	os.Remove("smog.conf")
+}
+
+func TestLoadConfig(t *testing.T) {
+	t.Run("ValidConfigFile", func(t *testing.T) {
+		content := `
+LogLevel = "Verbose"
+LogPath = "/var/log/smog.log"
+GoogleCredentialsPath = "/etc/smog/credentials.json"
+GoogleTokenPath = "/etc/smog/token.json"
+SMTPUser = "testuser"
+SMTPPassword = "testpassword"
+SMTPPort = 2526
+MessageSizeLimitMB = 20
+AllowedSubnets = ["192.168.1.0/24", "10.0.0.1"]
+`
+		tmpfile, err := os.CreateTemp("", "smog.conf")
+		assert.NoError(t, err)
+		defer os.Remove(tmpfile.Name())
+
+		_, err = tmpfile.WriteString(content)
+		assert.NoError(t, err)
+		err = tmpfile.Close()
+		assert.NoError(t, err)
+
+		config, err := LoadConfig(tmpfile.Name())
+		assert.NoError(t, err)
+
+		expected := Config{
+			LogLevel:              "Verbose",
+			LogPath:               "/var/log/smog.log",
+			GoogleCredentialsPath: "/etc/smog/credentials.json",
+			GoogleTokenPath:       "/etc/smog/token.json",
+			SMTPUser:              "testuser",
+			SMTPPassword:          "testpassword",
+			SMTPPort:              2526,
+			MessageSizeLimitMB:    20,
+			AllowedSubnets:        []string{"192.168.1.0/24", "10.0.0.1"},
+		}
+
+		assert.Equal(t, expected, config)
+	})
+
+	t.Run("NonExistentConfigFile", func(t *testing.T) {
+		_, err := LoadConfig("non-existent-config-file.toml")
+		assert.Error(t, err)
+	})
+
+	t.Run("MalformedConfigFile", func(t *testing.T) {
+		content := `this is not valid toml`
+		tmpfile, err := os.CreateTemp("", "smog.conf")
+		assert.NoError(t, err)
+		defer os.Remove(tmpfile.Name())
+
+		_, err = tmpfile.WriteString(content)
+		assert.NoError(t, err)
+		err = tmpfile.Close()
+		assert.NoError(t, err)
+
+		_, err = LoadConfig(tmpfile.Name())
+		assert.Error(t, err)
+	})
+
+	t.Run("OverrideWithEnvVars", func(t *testing.T) {
+		// Set environment variables that should override file content.
+		t.Setenv("LOGLEVEL", "TestLevel")
+		t.Setenv("SMTPPORT", "9999")
+		t.Setenv("ALLOWEDSUBNETS", "1.1.1.1,2.2.2.2")
+
+		// Create a config file with different values.
+		content := `
+LogLevel = "FileLevel"
+SMTPPort = 1234
+AllowedSubnets = ["3.3.3.3"]
+`
+		tmpfile, err := os.CreateTemp("", "smog.conf")
+		assert.NoError(t, err)
+		defer os.Remove(tmpfile.Name())
+
+		_, err = tmpfile.WriteString(content)
+		assert.NoError(t, err)
+		err = tmpfile.Close()
+		assert.NoError(t, err)
+
+		config, err := LoadConfig(tmpfile.Name())
+		assert.NoError(t, err)
+
+		// Assert that environment variables took precedence.
+		assert.Equal(t, "TestLevel", config.LogLevel)
+		assert.Equal(t, 9999, config.SMTPPort)
+		// Viper can automatically split comma-separated environment variables into slices.
+		assert.Equal(t, []string{"1.1.1.1", "2.2.2.2"}, config.AllowedSubnets)
+	})
 }
