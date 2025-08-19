@@ -48,8 +48,8 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: smog-macos
-          path: dist/smog-macos.tar.gz
+          name: smog-darwin
+          path: dist/smog-darwin.tar.gz
           retention-days: 14
 
   build-windows:
@@ -71,5 +71,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smog-windows
-          path: dist/smog-windows.zip
+          path: dist/smog-windows.tar.gz
           retention-days: 14
