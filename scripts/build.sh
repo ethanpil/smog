@@ -56,4 +56,13 @@ case "$TARGET_OS" in
 esac
 
 echo "All builds for $TARGET_OS completed successfully."
+
+# Archive the binaries
+cd "$OUTPUT_DIR"
+ARCHIVE_NAME="smog-$TARGET_OS.tar.gz"
+tar -czf "$ARCHIVE_NAME" smog-$TARGET_OS-*
+
+cd "$ROOT_DIR"
+
+echo "Successfully created archive: $OUTPUT_DIR/$ARCHIVE_NAME"
 ls -l "$OUTPUT_DIR"
