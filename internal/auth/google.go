@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -252,10 +253,59 @@ func tokenFromFile(logger *slog.Logger, file string) (*oauth2.Token, error) {
 // Saves a token to a file path.
 func saveToken(logger *slog.Logger, path string, token *oauth2.Token) error {
 	logger.Info("caching oauth token", "path", path)
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return fmt.Errorf("cannot create token directory: %w", err)
+	}
+
+	// Backup existing token
+	if _, err := os.Stat(path); err == nil {
+		backupPath := path + ".bak"
+		logger.Info("backing up existing token", "path", backupPath)
+		if err := os.Rename(path, backupPath); err != nil {
+			return fmt.Errorf("failed to backup token: %w", err)
+		}
+	}
+
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("unable to cache oauth token: %v", err)
 	}
 	defer f.Close()
 	return json.NewEncoder(f).Encode(token)
+}
+
+// RevokeToken securely deletes the token file.
+func RevokeToken(logger *slog.Logger, cfg *config.Config) error {
+	tokenPath := cfg.GoogleTokenPath
+	logger.Info("revoking token", "path", tokenPath)
+
+	// Overwrite with zeros
+	f, err := os.OpenFile(tokenPath, os.O_WRONLY, 0)
+	if err != nil {
+		if os.IsNotExist(err) {
+			logger.Info("token file not found, nothing to revoke")
+			return nil
+		}
+		return fmt.Errorf("failed to open token file for writing: %w", err)
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get token file info: %w", err)
+	}
+
+	if _, err := f.Write(make([]byte, stat.Size())); err != nil {
+		return fmt.Errorf("failed to overwrite token file: %w", err)
+	}
+
+	// Delete the file
+	if err := os.Remove(tokenPath); err != nil {
+		return fmt.Errorf("failed to delete token file: %w", err)
+	}
+
+	logger.Info("token revoked successfully")
+	return nil
 }

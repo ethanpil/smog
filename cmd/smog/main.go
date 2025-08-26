@@ -104,7 +104,17 @@ var revokeCmd = &cobra.Command{
 	Use:   "revoke",
 	Short: "revokes gmail authentication",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("auth revoke command called")
+		cfg, err := config.LoadConfig(configPath)
+		if err != nil {
+			fmt.Printf("Error: failed to load configuration: %v\n", err)
+			os.Exit(1)
+		}
+		// Auth command should be verbose by default to guide the user.
+		logger := log.New(log.LevelVerbose, cfg.LogPath, true)
+		if err := auth.RevokeToken(logger, &cfg); err != nil {
+			logger.Error("failed to revoke token", "err", err)
+			os.Exit(1)
+		}
 	},
 }
 

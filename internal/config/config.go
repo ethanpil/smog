@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/viper"
 )
@@ -35,6 +36,15 @@ type Config struct {
 	AllowedSubnets []string `mapstructure:"AllowedSubnets"`
 }
 
+// getDefaultTokenPath returns the default path for the token file.
+func getDefaultTokenPath() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user config directory: %w", err)
+	}
+	return filepath.Join(configDir, "smog", "token.json"), nil
+}
+
 // LoadConfig reads configuration from file or environment variables.
 func LoadConfig(path string) (config Config, err error) {
 	viper.AddConfigPath("/etc/smog/")
@@ -53,10 +63,24 @@ func LoadConfig(path string) (config Config, err error) {
 
 	err = viper.ReadInConfig()
 	if err != nil {
-		return
+		// If the config file doesn't exist, we can continue with defaults.
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return
+		}
 	}
 
 	err = viper.Unmarshal(&config)
+	if err != nil {
+		return
+	}
+
+	if config.GoogleTokenPath == "" {
+		config.GoogleTokenPath, err = getDefaultTokenPath()
+		if err != nil {
+			return
+		}
+	}
+
 	return
 }
 

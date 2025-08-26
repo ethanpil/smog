@@ -20,10 +20,10 @@ LogPath = ""
 GoogleCredentialsPath = ""
 
 # GoogleTokenPath: Path to store the generated OAuth2 token.
-# Examples:
-#   Windows: C:\ProgramData\smog\token.json
-#   Linux: /var/lib/smog/token.json
-#   macOS: /Library/Application Support/smog/token.json
+# If empty, a platform-specific default is used, e.g.,
+#   Windows: %%APPDATA%%\smog\token.json
+#   Linux: $HOME/.config/smog/token.json
+#   macOS: $HOME/Library/Application Support/smog/token.json
 GoogleTokenPath = ""
 
 # SMTPUser: The username that SMTP clients must use to authenticate.
