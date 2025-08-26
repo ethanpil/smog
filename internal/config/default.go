@@ -1,6 +1,8 @@
 package config
 
-const defaultConfig = `
+import "fmt"
+
+var defaultConfig = fmt.Sprintf(`
 # smog configuration file
 # For more information, see: https://github.com/bodgit/smog
 
@@ -28,7 +30,7 @@ GoogleTokenPath = ""
 SMTPUser = "smog"
 
 # SMTPPassword: The password that SMTP clients must use.
-SMTPPassword = "smoggmos"
+SMTPPassword = "%s"
 
 # SMTPPort: The TCP port for the SMTP server to listen on.
 SMTPPort = 2525
@@ -39,4 +41,4 @@ MessageSizeLimitMB = 10
 # AllowedSubnets: A list of allowed client IP addresses or CIDR subnets.
 # Example: AllowedSubnets = ["192.168.1.0/24", "127.0.0.1"]
 AllowedSubnets = []
-`
+`, DefaultSMTPPassword)

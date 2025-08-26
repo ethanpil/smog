@@ -84,13 +84,6 @@ func (s *Session) Auth(mech string) (sasl.Server, error) {
 	}
 
 	return sasl.NewPlainServer(func(identity, username, password string) error {
-		// Per AGENTS.md, reject default password. This is a safety check;
-		// the main validation should be at startup.
-		if s.cfg.SMTPPassword == "smoggmos" {
-			s.log.Error("authentication failed: server is using the default insecure password")
-			return errors.New("authentication failed: server misconfiguration")
-		}
-
 		if username != s.cfg.SMTPUser || password != s.cfg.SMTPPassword {
 			s.log.Warn("authentication failed: invalid credentials", "username", username)
 			return errors.New("invalid username or password")

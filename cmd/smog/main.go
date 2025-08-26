@@ -50,8 +50,8 @@ var serveCmd = &cobra.Command{
 		// --- Validation Checks (from AGENTS.md) ---
 
 		// 1. Check for default password
-		if cfg.SMTPPassword == "smoggmos" {
-			logger.Error("security risk: the SMTP password is set to the default value 'smoggmos'")
+		if cfg.SMTPPassword == config.DefaultSMTPPassword {
+			logger.Error("security risk: the SMTP password is set to the default value", "password", config.DefaultSMTPPassword)
 			logger.Error("please change SMTPPassword in your configuration file before running the server")
 			os.Exit(1)
 		}

@@ -8,6 +8,11 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	// DefaultSMTPPassword is the default password that SMTP clients must use.
+	DefaultSMTPPassword = "smoggmos"
+)
+
 // Config stores all configuration for the application.
 type Config struct {
 	// LogLevel: Set the detail level for logs. Options: "Disabled", "Minimal", "Verbose".
