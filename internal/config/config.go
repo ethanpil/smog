@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/spf13/viper"
 )
@@ -47,41 +48,57 @@ func getDefaultTokenPath() (string, error) {
 
 // LoadConfig reads configuration from file or environment variables.
 func LoadConfig(path string) (config Config, err error) {
-	viper.AddConfigPath("/etc/smog/")
-	viper.AddConfigPath("$HOME/.config/smog")
-	viper.AddConfigPath(".")
+	// Add platform-specific default search paths.
+	switch runtime.GOOS {
+	case "windows":
+		viper.AddConfigPath(filepath.Join(os.Getenv("ProgramData"), "smog"))
+	case "linux":
+		viper.AddConfigPath("/etc/smog/")
+		viper.AddConfigPath("/var/lib/smog/")
+	case "darwin":
+		viper.AddConfigPath("/Library/Application Support/smog/")
+	}
+	viper.AddConfigPath(".") // Always search in the current directory.
+
 	viper.SetConfigName("smog")
 	viper.SetConfigType("toml")
 
 	viper.AutomaticEnv()
 
 	if path != "" {
-		viper.SetConfigFile(path)
-	} else {
-		viper.SetConfigFile("smog.conf")
+		viper.SetConfigFile(path) // Use specific config file path if provided.
 	}
 
 	err = viper.ReadInConfig()
 	if err != nil {
-		// If the config file doesn't exist, we can continue with defaults.
+		// If the config file is not found, we can proceed with defaults,
+		// but we will validate required fields later.
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return
+			return config, fmt.Errorf("error reading config file: %w", err)
 		}
 	}
 
 	err = viper.Unmarshal(&config)
 	if err != nil {
-		return
+		return config, fmt.Errorf("error unmarshalling config: %w", err)
 	}
 
+	// --- Validation and Defaulting ---
+
+	// If GoogleTokenPath is not set, provide a platform-specific default.
 	if config.GoogleTokenPath == "" {
 		config.GoogleTokenPath, err = getDefaultTokenPath()
 		if err != nil {
-			return
+			return config, fmt.Errorf("failed to determine default token path: %w", err)
 		}
 	}
 
-	return
+	// GoogleCredentialsPath is mandatory.
+	if config.GoogleCredentialsPath == "" {
+		return config, fmt.Errorf("mandatory configuration field 'GoogleCredentialsPath' is not set")
+	}
+
+	return config, nil
 }
 
 // Create creates a default config file.

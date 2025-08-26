@@ -4,7 +4,7 @@ A cross-platform SMTP to Gmail API relay tool.
 ## DESCRIPTION
 smog acts as a local SMTP server that accepts authenticated email submissions and relays them through the Google Gmail API using OAuth2. It is designed for legacy systems that can only send email via SMTP  ut need to integrate with a modern Gmail account.
 
-Before first use, the administrator must run `smog auth login` to authorize the application with Google.
+Before first use, the administrator must run `smog auth login` to authorize the application with Google. The `GoogleCredentialsPath` configuration option must be set to the path of the `credentials.json` file downloaded from the Google Cloud Console.
 
 ## USAGE
      smog [global flags] [command]
@@ -43,14 +43,18 @@ Before first use, the administrator must run `smog auth login` to authorize the 
            Displays this help message.
 
 ## FILES
-     /etc/smog.conf
-           Default configuration file path on Linux.
+     smog.conf is the default configuration file. It is searched for in the
+     current directory, and in the following platform-specific locations:
 
-     ~/smog.conf
-           Default configuration file path on macOS.
+     Linux
+           /etc/smog/smog.conf
+           /var/lib/smog/smog.conf
 
-     <executable_dir>\smog.conf
-           Default configuration file path on Windows.
+     macOS
+           /Library/Application Support/smog/smog.conf
+
+     Windows
+           C:\ProgramData\smog\smog.conf
 
 ## EXAMPLES
      Run the SMTP server with the default configuration:
