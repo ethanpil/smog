@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 package config
 
 import "fmt"
@@ -10,21 +13,14 @@ var defaultConfig = fmt.Sprintf(`
 LogLevel = "Minimal"
 
 # LogPath: Path to the log file. Platform-specific defaults are used if empty.
-# Examples:
-#   Windows: C:\ProgramData\smog\smog.log
-#   Linux: /var/log/smog/smog.log
-#   macOS: /Library/Logs/smog/smog.log
+# Example: /var/log/smog/smog.log
 LogPath = ""
 
 # GoogleCredentialsPath: Absolute path to the credentials.json file downloaded from Google Cloud.
-GoogleCredentialsPath = ""
+GoogleCredentialsPath = "/etc/smog/credentials.json"
 
 # GoogleTokenPath: Path to store the generated OAuth2 token.
-# If empty, a platform-specific default is used, e.g.,
-#   Windows: %%APPDATA%%\smog\token.json
-#   Linux: $HOME/.config/smog/token.json
-#   macOS: $HOME/Library/Application Support/smog/token.json
-GoogleTokenPath = ""
+GoogleTokenPath = "/etc/smog/token.json"
 
 # SMTPUser: The username that SMTP clients must use to authenticate.
 SMTPUser = "smog"
