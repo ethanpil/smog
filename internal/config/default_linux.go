@@ -37,4 +37,16 @@ MessageSizeLimitMB = 10
 # AllowedSubnets: A list of allowed client IP addresses or CIDR subnets.
 # Example: AllowedSubnets = ["192.168.1.0/24", "127.0.0.1"]
 AllowedSubnets = []
+
+# ReadTimeout: The maximum duration in seconds for reading the entire request.
+ReadTimeout = 10
+
+# WriteTimeout: The maximum duration in seconds for writing the response.
+WriteTimeout = 10
+
+# MaxRecipients: The maximum number of recipients for a single email.
+MaxRecipients = 50
+
+# AllowInsecureAuth: Allow insecure authentication methods.
+AllowInsecureAuth = true
 `, DefaultSMTPPassword)

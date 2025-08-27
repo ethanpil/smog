@@ -50,11 +50,11 @@ func Run(cfg *config.Config, logger *slog.Logger, gmailService gmail.Service) er
 
 	s.Addr = fmt.Sprintf(":%d", cfg.SMTPPort)
 	s.Domain = "localhost"
-	s.ReadTimeout = 10 * time.Second
-	s.WriteTimeout = 10 * time.Second
+	s.ReadTimeout = time.Duration(cfg.ReadTimeout) * time.Second
+	s.WriteTimeout = time.Duration(cfg.WriteTimeout) * time.Second
 	s.MaxMessageBytes = int64(cfg.MessageSizeLimitMB) * 1024 * 1024
-	s.MaxRecipients = 50
-	s.AllowInsecureAuth = true
+	s.MaxRecipients = cfg.MaxRecipients
+	s.AllowInsecureAuth = cfg.AllowInsecureAuth
 
 	// Channel to hold errors from the server goroutine
 	serverErrors := make(chan error, 1)

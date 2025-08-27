@@ -110,6 +110,10 @@ func TestEndToEndMessageRelay(t *testing.T) {
 		SMTPPassword:       "testpass",
 		SMTPPort:           smtpPort,
 		MessageSizeLimitMB: 5,
+		ReadTimeout:        15,
+		WriteTimeout:       15,
+		MaxRecipients:      25,
+		AllowInsecureAuth:  true,
 	}
 
 	// Create a logger that writes to the test's output.
