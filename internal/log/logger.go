@@ -39,7 +39,9 @@ func New(level, path string, verbose bool) *slog.Logger {
 			writers = append(writers, file)
 		} else {
 			// Fallback to stderr for the error message, as the logger isn't fully set up.
-			slog.New(slog.NewTextHandler(os.Stderr, nil)).Error("failed to open log file", "path", path, "err", err)
+			transientLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+			transientLogger.Error("failed to open log file", "path", path, "err", err)
+			transientLogger.Warn("logging will fallback to the console")
 		}
 	}
 

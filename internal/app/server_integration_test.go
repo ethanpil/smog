@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"net/http"
 	"net/http/httptest"
 	"net/smtp"
@@ -104,17 +105,17 @@ func TestEndToEndMessageRelay(t *testing.T) {
 	smtpPort := getFreePort(t)
 
 	cfg := &config.Config{
-		LogLevel:           "Disabled", // Change to "Verbose" for debugging
+		LogLevel:           "Verbose", // Force verbose logging for tests
 		SMTPUser:           "testuser",
 		SMTPPassword:       "testpass",
 		SMTPPort:           smtpPort,
 		MessageSizeLimitMB: 5,
 	}
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	if cfg.LogLevel == "Verbose" {
-		logger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	}
+	// Create a logger that writes to the test's output.
+	// The `go test` command will capture stdout and print it on failure
+	// or with the -v flag.
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	// Create the mock Gmail service that points to our test server
 	mockService := newMockGmailService(t, mockGoogleAPIServer)

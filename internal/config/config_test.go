@@ -107,9 +107,9 @@ AllowedSubnets = ["192.168.1.0/24", "10.0.0.1"]
 
 	t.Run("OverrideWithEnvVars", func(t *testing.T) {
 		// Set environment variables that should override file content.
-		t.Setenv("LOGLEVEL", "TestLevel")
-		t.Setenv("SMTPPORT", "9999")
-		t.Setenv("ALLOWEDSUBNETS", "1.1.1.1,2.2.2.2")
+		t.Setenv("LOG_LEVEL", "TestLevel")
+		t.Setenv("SMTP_PORT", "9999")
+		t.Setenv("ALLOWED_SUBNETS", "1.1.1.1,2.2.2.2")
 
 		// Create a config file with different values.
 		content := `

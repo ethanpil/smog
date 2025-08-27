@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"strings"
 
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
@@ -150,8 +151,14 @@ func (s *Session) Data(r io.Reader) error {
 	sentMsg, err := s.gmailClient.Send(ctx, s.token, s.data.Bytes())
 	if err != nil {
 		s.log.Error("failed to send email via gmail", "err", err)
-		// Return a generic error to the SMTP client
-		return errors.New("failed to relay message")
+		// Return more specific errors based on error type
+		if strings.Contains(err.Error(), "quota") {
+			return &smtp.SMTPError{Code: 452, Message: "Service temporarily unavailable due to quota limits"}
+		}
+		if strings.Contains(err.Error(), "authentication") {
+			return &smtp.SMTPError{Code: 535, Message: "Authentication required - please run 'smog auth login'"}
+		}
+		return &smtp.SMTPError{Code: 451, Message: "Temporary failure relaying message"}
 	}
 
 	s.log.Info("message relayed successfully",
