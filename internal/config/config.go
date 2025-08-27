@@ -64,6 +64,12 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetConfigType("toml")
 
 	viper.AutomaticEnv()
+	// Bind specific environment variables to config keys. This is more explicit
+	// and handles cases where the key name doesn't directly map to the env var name
+	// (e.g., LogLevel -> LOG_LEVEL).
+	viper.BindEnv("LogLevel", "LOG_LEVEL")
+	viper.BindEnv("SMTPPort", "SMTP_PORT")
+	viper.BindEnv("AllowedSubnets", "ALLOWED_SUBNETS")
 
 	if path != "" {
 		viper.SetConfigFile(path) // Use specific config file path if provided.
