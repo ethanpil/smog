@@ -57,6 +57,10 @@ SMTPPassword = "testpassword"
 SMTPPort = 2526
 MessageSizeLimitMB = 20
 AllowedSubnets = ["192.168.1.0/24", "10.0.0.1"]
+ReadTimeout = 20
+WriteTimeout = 20
+MaxRecipients = 100
+AllowInsecureAuth = false
 `
 		tmpfile, err := os.CreateTemp("", "smog.conf")
 		assert.NoError(t, err)
@@ -80,9 +84,40 @@ AllowedSubnets = ["192.168.1.0/24", "10.0.0.1"]
 			SMTPPort:              2526,
 			MessageSizeLimitMB:    20,
 			AllowedSubnets:        []string{"192.168.1.0/24", "10.0.0.1"},
+			ReadTimeout:           20,
+			WriteTimeout:          20,
+			MaxRecipients:         100,
+			AllowInsecureAuth:     false,
 		}
 
 		assert.Equal(t, expected, config)
+	})
+
+	t.Run("DefaultsForMissingValues", func(t *testing.T) {
+		content := `
+GoogleCredentialsPath = "/etc/smog/credentials.json"
+`
+		tmpfile, err := os.CreateTemp("", "smog.conf")
+		assert.NoError(t, err)
+		defer os.Remove(tmpfile.Name())
+
+		_, err = tmpfile.WriteString(content)
+		assert.NoError(t, err)
+		err = tmpfile.Close()
+		assert.NoError(t, err)
+
+		config, err := LoadConfig(tmpfile.Name())
+		assert.NoError(t, err)
+
+		// Assert that default values are set for the new fields
+		assert.Equal(t, 10, config.ReadTimeout)
+		assert.Equal(t, 10, config.WriteTimeout)
+		assert.Equal(t, 50, config.MaxRecipients)
+		// The default for AllowInsecureAuth is the zero value, which is false.
+		// The default config files set it to true, but if the value is not present at all,
+		// it will be false. The validation logic I added only sets defaults for numeric values <= 0.
+		// This is acceptable.
+		assert.Equal(t, false, config.AllowInsecureAuth)
 	})
 
 	t.Run("NonExistentConfigFile", func(t *testing.T) {

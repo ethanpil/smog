@@ -35,6 +35,14 @@ type Config struct {
 	MessageSizeLimitMB int `mapstructure:"MessageSizeLimitMB"`
 	// AllowedSubnets: A list of allowed client IP addresses or CIDR subnets.
 	AllowedSubnets []string `mapstructure:"AllowedSubnets"`
+	// ReadTimeout: The maximum duration in seconds for reading the entire request.
+	ReadTimeout int `mapstructure:"ReadTimeout"`
+	// WriteTimeout: The maximum duration in seconds for writing the response.
+	WriteTimeout int `mapstructure:"WriteTimeout"`
+	// MaxRecipients: The maximum number of recipients for a single email.
+	MaxRecipients int `mapstructure:"MaxRecipients"`
+	// AllowInsecureAuth: Allow insecure authentication methods.
+	AllowInsecureAuth bool `mapstructure:"AllowInsecureAuth"`
 }
 
 // getDefaultTokenPath returns the default path for the token file.
@@ -102,6 +110,17 @@ func LoadConfig(path string) (config Config, err error) {
 	// GoogleCredentialsPath is mandatory.
 	if config.GoogleCredentialsPath == "" {
 		return config, fmt.Errorf("mandatory configuration field 'GoogleCredentialsPath' is not set")
+	}
+
+	// Set defaults for new fields if they are not set
+	if config.ReadTimeout <= 0 {
+		config.ReadTimeout = 10
+	}
+	if config.WriteTimeout <= 0 {
+		config.WriteTimeout = 10
+	}
+	if config.MaxRecipients <= 0 {
+		config.MaxRecipients = 50
 	}
 
 	return config, nil
