@@ -15,7 +15,6 @@ import (
 	"github.com/ethanpil/smog/internal/config"
 	"github.com/ethanpil/smog/internal/gmail"
 	"github.com/ethanpil/smog/internal/netutil"
-	"golang.org/x/oauth2"
 )
 
 // The Backend implements SMTP server methods.
@@ -23,7 +22,6 @@ type Backend struct {
 	Cfg         *config.Config
 	Log         *slog.Logger
 	GmailClient gmail.Service
-	Token       *oauth2.Token
 }
 
 func (be *Backend) NewSession(c *smtp.Conn) (smtp.Session, error) {
@@ -58,7 +56,6 @@ func (be *Backend) newSession(conn net.Conn) (smtp.Session, error) {
 		log:         be.Log,
 		cfg:         be.Cfg,
 		gmailClient: be.GmailClient,
-		token:       be.Token,
 		clientIP:    ip.String(),
 	}, nil
 }
@@ -68,7 +65,6 @@ type Session struct {
 	log         *slog.Logger
 	cfg         *config.Config
 	gmailClient gmail.Service
-	token       *oauth2.Token
 	clientIP    string
 	from        string
 	to          []string
@@ -148,7 +144,7 @@ func (s *Session) Data(r io.Reader) error {
 	s.log.Info("message data received, preparing to send via gmail", "from", s.from, "to", s.to)
 
 	ctx := context.Background()
-	sentMsg, err := s.gmailClient.Send(ctx, s.token, s.data.Bytes())
+	sentMsg, err := s.gmailClient.Send(ctx, s.data.Bytes())
 	if err != nil {
 		s.log.Error("failed to send email via gmail", "err", err)
 		// Return more specific errors based on error type

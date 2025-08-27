@@ -1,28 +1,25 @@
 package app
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"net/http"
 	"net/http/httptest"
 	"net/smtp"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethanpil/smog/internal/config"
-	"github.com/ethanpil/smog/internal/gmail"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	gogmail "google.golang.org/api/gmail/v1"
-	"google.golang.org/api/option"
 )
 
 // getFreePort asks the kernel for a free open port that is ready to use.
@@ -37,42 +34,25 @@ func getFreePort(t *testing.T) int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
-// mockGmailService is a custom implementation of the gmail.Service that allows
-// us to intercept the Send call and redirect it to our httptest.Server.
-type mockGmailService struct {
-	gmail.Service
-	t           *testing.T
-	mockGServer *httptest.Server
-	httpClient  *http.Client
-}
+// Test helper to create a mock google api server and a client that talks to it.
+func newMockGServer(t *testing.T) (*http.Client, *httptest.Server) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// This handler can be expanded if tests need to simulate errors or specific responses.
+		w.Header().Set("Content-Type", "application/json")
+		err := json.NewEncoder(w).Encode(&gogmail.Message{Id: "test-message-id"})
+		require.NoError(t, err, "failed to encode google api response")
+	}))
 
-// newMockGmailService creates a gmail service that routes requests to a mock server.
-func newMockGmailService(t *testing.T, mockGServer *httptest.Server) gmail.Service {
-	return &mockGmailService{
-		t:           t,
-		mockGServer: mockGServer,
-		httpClient:  mockGServer.Client(), // Use the test server's client
-	}
-}
-
-// Send overrides the real Send method. It creates a temporary, real gmail.Service
-// configured to point to the mock server's URL, then calls the real Send method
-// on that temporary service. This avoids having to re-implement the base64 encoding
-// and API call structure.
-func (m *mockGmailService) Send(ctx context.Context, token *oauth2.Token, rawEmail []byte) (*gogmail.Message, error) {
-	// Create a real gmail service client, but force it to use our mock server's URL
-	// and http client. This is the most reliable way to test the real client's behavior.
-	realGmailService, err := gogmail.NewService(ctx, option.WithHTTPClient(m.httpClient), option.WithEndpoint(m.mockGServer.URL))
-	require.NoError(m.t, err)
-
-	// Base64url-encode the raw email, as the real client would do.
-	encodedEmail := base64.URLEncoding.EncodeToString(rawEmail)
-	message := &gogmail.Message{
-		Raw: encodedEmail,
+	// Create an http client that is configured to talk to our mock server.
+	// It's also configured with a dummy token source.
+	client := &http.Client{
+		Transport: &oauth2.Transport{
+			Source: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "dummy-token-for-test"}),
+			Base:   mockServer.Client().Transport,
+		},
 	}
 
-	// Call the real "Send" method, which will be directed to our mock server.
-	return realGmailService.Users.Messages.Send("me", message).Do()
+	return client, mockServer
 }
 
 // TestEndToEndMessageRelay simulates a full SMTP transaction and verifies that
@@ -83,12 +63,14 @@ func TestEndToEndMessageRelay(t *testing.T) {
 	var requestReceived sync.Mutex
 	requestReceived.Lock() // Lock initially
 
-	mockGoogleAPIServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// This is the new part of the test setup. We create a mock server and a client that talks to it.
+	mockGoogleAPIClient, mockGoogleAPIServer := newMockGServer(t)
+	defer mockGoogleAPIServer.Close()
+
+	// We need to override the handler to get the request body
+	mockGoogleAPIServer.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer requestReceived.Unlock() // Unlock when request is received
 
-		// The Google API client's internal URL construction for uploads is complex.
-		// The critical part of this test is to verify the body, not the exact URL.
-		// We just need to ensure it's a POST request to our mock server.
 		require.Equal(t, http.MethodPost, r.Method, "http method should be POST")
 
 		var err error
@@ -98,8 +80,7 @@ func TestEndToEndMessageRelay(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		err = json.NewEncoder(w).Encode(&gogmail.Message{Id: "test-message-id"})
 		require.NoError(t, err, "failed to encode google api response")
-	}))
-	defer mockGoogleAPIServer.Close()
+	})
 
 	// 2. Configure Smog to use the mock server
 	smtpPort := getFreePort(t)
@@ -114,23 +95,27 @@ func TestEndToEndMessageRelay(t *testing.T) {
 		WriteTimeout:       15,
 		MaxRecipients:      25,
 		AllowInsecureAuth:  true,
+		// These paths are needed for the call to auth.GetClient inside app.Run
+		GoogleCredentialsPath: "testdata/dummy_credentials.json",
+		GoogleTokenPath:       "testdata/dummy_token.json",
 	}
 
-	// Create a logger that writes to the test's output.
-	// The `go test` command will capture stdout and print it on failure
-	// or with the -v flag.
+	// Create dummy credential and token files for the test
+	require.NoError(t, os.MkdirAll("testdata", 0755))
+	require.NoError(t, os.WriteFile(cfg.GoogleCredentialsPath, []byte(`{"installed":{"client_id":"dummy"}}`), 0644))
+	require.NoError(t, os.WriteFile(cfg.GoogleTokenPath, []byte(`{"access_token":"dummy","refresh_token":"dummy"}`), 0644))
+	defer os.RemoveAll("testdata")
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	// Create the mock Gmail service that points to our test server
-	mockService := newMockGmailService(t, mockGoogleAPIServer)
-
-	// 3. Start the smog server in a goroutine, injecting the mock service
+	// 3. Start the smog server in a goroutine, injecting the mock client
 	serverErrChan := make(chan error, 1)
 	go func() {
-		serverErrChan <- Run(cfg, logger, mockService)
+		// We pass the mock client here. The Run function will use this client
+		// instead of creating a real one.
+		serverErrChan <- Run(cfg, logger, mockGoogleAPIClient)
 	}()
 
-	// Give the server a moment to start up.
 	time.Sleep(100 * time.Millisecond)
 
 	// 4. Use an SMTP client to send a message
@@ -148,41 +133,28 @@ func TestEndToEndMessageRelay(t *testing.T) {
 	require.NoError(t, err, "smtp.SendMail should succeed")
 
 	// 5. Assertions
-	// Wait for the mock API to receive the request, with a timeout.
 	success := make(chan bool)
 	go func() {
-		requestReceived.Lock() // This will block until the handler unlocks it
+		requestReceived.Lock()
 		close(success)
 	}()
 
 	select {
 	case <-success:
-		// The request was received and the lock was released.
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for mock API to receive request")
 	}
 
 	require.NotNil(t, receivedBodyBytes, "mock google api should have received a body")
 
-	// The Google API client sends a multipart request. A simple string search
-	// is the most robust way to check for our message's presence.
-	// The real gmail.Client double-encodes the message in a multipart body,
-	// so we check for the raw message content.
-	// The `Send` method in our mock service encodes it, so we need to find the encoded version.
 	encodedMsg := base64.URLEncoding.EncodeToString(msg)
 	bodyStr := string(receivedBodyBytes)
 
-	// The google api client creates a multipart/related request.
-	// One part has the metadata (in JSON) and the other has the raw message.
-	// The JSON part refers to the raw part.
-	// We need to find the base64 encoded message in the body.
 	assert.Contains(t, bodyStr, encodedMsg, "request body should contain the base64url encoded message")
 
-	// Check that the server goroutine hasn't exited with an error
 	select {
 	case err := <-serverErrChan:
 		require.NoError(t, err, "server should not have exited with an error")
 	default:
-		// Server is still running, which is expected.
 	}
 }

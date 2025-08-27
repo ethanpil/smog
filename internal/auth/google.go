@@ -317,3 +317,22 @@ func RevokeToken(logger *slog.Logger, cfg *config.Config) error {
 	logger.Info("token revoked successfully")
 	return nil
 }
+
+// ValidateToken uses the provided client to make a simple API call to check if the
+// token is valid and the connection to the Gmail API is working.
+func ValidateToken(logger *slog.Logger, client *http.Client) error {
+	logger.Info("validating google api token")
+	srv, err := gmail.New(client)
+	if err != nil {
+		return fmt.Errorf("unable to retrieve gmail client for validation: %w", err)
+	}
+
+	// Make a simple, read-only API call to check if the token is valid.
+	_, err = srv.Users.Labels.List("me").Do()
+	if err != nil {
+		return fmt.Errorf("token validation failed: unable to retrieve labels. please run 'smog auth login' to re-authenticate: %w", err)
+	}
+
+	logger.Info("token is valid")
+	return nil
+}

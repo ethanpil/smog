@@ -57,20 +57,22 @@ var serveCmd = &cobra.Command{
 		}
 
 		// 2. Check for authorization token
-		token, err := auth.LoadToken(logger, &cfg)
+		client, _, err := auth.GetClient(logger, &cfg)
 		if err != nil {
-			logger.Error("failed to load google api token", "err", err)
+			logger.Error("failed to get google api client", "err", err)
+			logger.Error("please run 'smog auth login' to authorize with google")
 			os.Exit(1)
 		}
-		if token == nil {
-			logger.Error("google api token not found or invalid")
-			logger.Error("please run 'smog auth login' to authorize with google")
+
+		// 3. Validate the token by making a test API call
+		if err := auth.ValidateToken(logger, client); err != nil {
+			logger.Error("failed to validate google api token", "err", err)
 			os.Exit(1)
 		}
 
 		logger.Info("configuration and credentials validated successfully")
 
-		if err := app.Run(&cfg, logger, nil); err != nil {
+		if err := app.Run(&cfg, logger, client); err != nil {
 			logger.Error("failed to start server", "err", err)
 			os.Exit(1)
 		}
