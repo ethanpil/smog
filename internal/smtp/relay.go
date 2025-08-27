@@ -127,10 +127,13 @@ func (s *Session) Data(r io.Reader) error {
 		}
 
 		if int64(s.data.Len()) > limitBytes {
-			s.log.Warn("message rejected: size exceeds limit", "from", s.from, "to", s.to, "size_bytes", s.data.Len(), "limit_bytes", limitBytes)
+			s.log.Warn("message rejected: size exceeds limit",
+				"size_mb", float64(s.data.Len())/(1024*1024),
+				"limit_mb", s.cfg.MessageSizeLimitMB)
 			return &smtp.SMTPError{
 				Code:    552,
-				Message: fmt.Sprintf("Message size exceeds fixed limit of %d MB", s.cfg.MessageSizeLimitMB),
+				Message: fmt.Sprintf("Message size %.2f MB exceeds limit of %d MB",
+					float64(s.data.Len())/(1024*1024), s.cfg.MessageSizeLimitMB),
 			}
 		}
 	} else {
@@ -162,7 +165,7 @@ func (s *Session) Data(r io.Reader) error {
 
 func (s *Session) Reset() {
 	s.from = ""
-	s.to = nil
+	s.to = s.to[:0] // Reuse slice capacity
 	s.data.Reset()
 }
 
