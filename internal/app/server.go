@@ -11,39 +11,26 @@ import (
 	"net/http"
 
 	"github.com/emersion/go-smtp"
-	"github.com/ethanpil/smog/internal/auth"
 	"github.com/ethanpil/smog/internal/config"
 	"github.com/ethanpil/smog/internal/gmail"
 	smog_smtp "github.com/ethanpil/smog/internal/smtp"
-	"golang.org/x/oauth2"
 )
 
-func Run(cfg *config.Config, logger *slog.Logger, gmailService gmail.Service) error {
-	var token *oauth2.Token
-	var err error
-
+func Run(cfg *config.Config, logger *slog.Logger, client *http.Client) error {
 	// If a specific gmail service isn't provided, create the default one.
 	// This is the standard operational path.
-	if gmailService == nil {
-		logger.Debug("creating default google api client")
-		var httpClient *http.Client
-		httpClient, token, err = auth.GetClient(logger, cfg)
-		if err != nil {
-			return fmt.Errorf("could not get google api client: %w", err)
-		}
-		gmailService = gmail.New(logger, httpClient)
-	} else {
-		// If a gmail service (likely a mock) is provided, we still need a placeholder token
-		// for the backend, although it may not be used by the mock.
-		logger.Debug("using provided gmail service")
-		token = &oauth2.Token{AccessToken: "fake-test-token"}
+	if client == nil {
+		// This branch is now primarily for tests that don't need a live http client.
+		// A nil client will cause the backend to fail if it tries to send an email.
+		logger.Warn("running with a nil http client; email sending will fail")
 	}
+
+	gmailService := gmail.New(logger, client)
 
 	be := &smog_smtp.Backend{
 		Cfg:         cfg,
 		Log:         logger,
 		GmailClient: gmailService,
-		Token:       token,
 	}
 
 	s := smtp.NewServer(be)
