@@ -3,6 +3,7 @@ package smtp
 import (
 	"context"
 	"log/slog"
+	"net"
 	"strings"
 	"testing"
 
@@ -92,5 +93,124 @@ func TestSession_MailRcptData(t *testing.T) {
 	}
 	if len(session.to) != 0 {
 		t.Errorf("Expected to to be empty after Mail(), got '%v'", session.to)
+	}
+}
+
+// mockNetConn is a mock implementation of net.Conn for testing Backend.newSession.
+type mockNetConn struct {
+	net.Conn
+	remoteAddr net.Addr
+}
+
+func (m *mockNetConn) RemoteAddr() net.Addr {
+	return m.remoteAddr
+}
+
+// mockAddr is a mock implementation of net.Addr for testing.
+type mockAddr struct {
+	network string
+	address string
+}
+
+func (a *mockAddr) Network() string {
+	return a.network
+}
+
+func (a *mockAddr) String() string {
+	return a.address
+}
+
+func TestBackend_newSession(t *testing.T) {
+	logger := slog.Default()
+	cfg := &config.Config{
+		AllowedSubnets: []string{"192.168.1.0/24", "2001:db8::/32"},
+	}
+
+	backend := &Backend{
+		Cfg: cfg,
+		Log: logger,
+	}
+
+	testCases := []struct {
+		name          string
+		remoteAddr    net.Addr
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "Allowed IPv4",
+			remoteAddr: &mockAddr{
+				network: "tcp",
+				address: "192.168.1.10:12345",
+			},
+			expectError: false,
+		},
+		{
+			name: "Disallowed IPv4",
+			remoteAddr: &mockAddr{
+				network: "tcp",
+				address: "10.0.0.1:12345",
+			},
+			expectError:   true,
+			errorContains: "access denied",
+		},
+		{
+			name: "Allowed IPv6",
+			remoteAddr: &mockAddr{
+				network: "tcp",
+				address: "[2001:db8::1]:12345",
+			},
+			expectError: false,
+		},
+		{
+			name: "Disallowed IPv6",
+			remoteAddr: &mockAddr{
+				network: "tcp",
+				address: "[fe80::1]:12344",
+			},
+			expectError:   true,
+			errorContains: "access denied",
+		},
+		{
+			name: "Invalid address format",
+			remoteAddr: &mockAddr{
+				network: "tcp",
+				address: "invalid-address",
+			},
+			expectError:   true,
+			errorContains: "internal server error: could not parse address",
+		},
+		{
+			name: "Address without port",
+			remoteAddr: &mockAddr{
+				network: "tcp",
+				address: "192.168.1.10",
+			},
+			expectError:   true,
+			errorContains: "internal server error: could not parse address",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockConn := &mockNetConn{remoteAddr: tc.remoteAddr}
+			session, err := backend.newSession(mockConn)
+
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("Expected an error, but got none")
+				}
+				if err != nil && tc.errorContains != "" && !strings.Contains(err.Error(), tc.errorContains) {
+					t.Errorf("Expected error to contain '%s', but it was '%s'", tc.errorContains, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Did not expect an error, but got: %v", err)
+				}
+				if session == nil {
+					t.Errorf("Expected a session, but got nil")
+				}
+			}
+		})
 	}
 }

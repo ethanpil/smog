@@ -26,10 +26,15 @@ type Backend struct {
 }
 
 func (be *Backend) NewSession(c *smtp.Conn) (smtp.Session, error) {
-	remoteAddr := c.Conn().RemoteAddr()
+	return be.newSession(c.Conn())
+}
+
+// newSession is the internal, testable implementation of NewSession.
+func (be *Backend) newSession(conn net.Conn) (smtp.Session, error) {
+	remoteAddr := conn.RemoteAddr()
 	ipStr, _, err := net.SplitHostPort(remoteAddr.String())
 	if err != nil {
-		be.Log.Error("could not parse remote address", "remoteAddr", remoteAddr.String(), "err", err)
+		be.Log.Error("could not parse remote address", "remoteAddr", remoteAddr.String(), "network", remoteAddr.Network(), "err", err)
 		return nil, fmt.Errorf("internal server error: could not parse address")
 	}
 	ip := net.ParseIP(ipStr)
