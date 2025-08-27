@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -108,16 +109,23 @@ func GetClient(logger *slog.Logger, cfg *config.Config) (*http.Client, *oauth2.T
 
 // getTokenFromBrowser attempts to automatically open a browser for OAuth authentication.
 func getTokenFromBrowser(logger *slog.Logger, config *oauth2.Config) (*oauth2.Token, error) {
-	// Use a fixed port as specified in AGENTS.md
-	const callbackPort = 53682
-	config.RedirectURL = fmt.Sprintf("http://127.0.0.1:%d", callbackPort)
-
 	// Create a channel to receive the authorization code
 	codeChan := make(chan string)
 	errChan := make(chan error)
 
+	// Use a random available port for the callback server
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create listener: %w", err)
+	}
+	defer listener.Close()
+
+	port := listener.Addr().(*net.TCPAddr).Port
+	config.RedirectURL = fmt.Sprintf("http://127.0.0.1:%d", port)
+	logger.Debug("oauth callback listening", "url", config.RedirectURL)
+
 	// Setup a temporary HTTP server to handle the OAuth redirect
-	server := &http.Server{Addr: fmt.Sprintf(":%d", callbackPort)}
+	server := &http.Server{}
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Get the authorization code from the query parameters
 		code := r.URL.Query().Get("code")
@@ -135,7 +143,7 @@ func getTokenFromBrowser(logger *slog.Logger, config *oauth2.Config) (*oauth2.To
 
 	// Start the server in a goroutine
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 			errChan <- fmt.Errorf("failed to start local server: %w", err)
 		}
 	}()
@@ -144,7 +152,7 @@ func getTokenFromBrowser(logger *slog.Logger, config *oauth2.Config) (*oauth2.To
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
 
 	// Try to open the URL in a browser
-	err := browser.OpenURL(authURL)
+	err = browser.OpenURL(authURL)
 	if err != nil {
 		logger.Warn("failed to open browser automatically", "err", err)
 		// If we can't open the browser, this flow has failed.
