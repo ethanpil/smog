@@ -36,7 +36,10 @@ func (c *Client) Send(ctx context.Context, token *oauth2.Token, rawEmail []byte)
 	c.logger.Info("sending email via gmail api")
 
 	// Create a new Gmail service using the provided token
-	srv, err := gmail.NewService(ctx, option.WithTokenSource(oauth2.StaticTokenSource(token)))
+	srv, err := gmail.NewService(ctx,
+		option.WithHTTPClient(c.client),
+		option.WithTokenSource(oauth2.StaticTokenSource(token)),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gmail service: %w", err)
 	}
