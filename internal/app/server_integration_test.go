@@ -8,10 +8,11 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"net/http"
 	"net/http/httptest"
 	"net/smtp"
+	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -148,11 +149,15 @@ func TestEndToEndMessageRelay(t *testing.T) {
 	auth := smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPassword, "localhost")
 
 	from := "sender@example.com"
-	to := []string{"recipient@example.com"}
-	msg := []byte("To: recipient@example.com\r\n" +
-		"Subject: Hello from Smog Test!\r\n" +
-		"\r\n" +
-		"This is a test message body.\r\n")
+	// Use different recipients for the envelope and the header to expose the bug.
+	envelopeRecipient := "envelope-recipient@example.com"
+	headerRecipient := "header-recipient@example.com"
+
+	to := []string{envelopeRecipient}
+	msg := []byte(fmt.Sprintf("To: %s\r\n"+
+		"Subject: Hello from Smog Test!\r\n"+
+		"\r\n"+
+		"This is a test message body.\r\n", headerRecipient))
 
 	err = smtp.SendMail(smtpAddr, auth, from, to, msg)
 	require.NoError(t, err, "smtp.SendMail should succeed")
@@ -174,19 +179,57 @@ func TestEndToEndMessageRelay(t *testing.T) {
 
 	require.NotNil(t, receivedBodyBytes, "mock google api should have received a body")
 
-	// The Google API client sends a multipart request. A simple string search
-	// is the most robust way to check for our message's presence.
-	// The real gmail.Client double-encodes the message in a multipart body,
-	// so we check for the raw message content.
-	// The `Send` method in our mock service encodes it, so we need to find the encoded version.
-	encodedMsg := base64.RawURLEncoding.EncodeToString(msg)
-	bodyStr := string(receivedBodyBytes)
+	// --- Start: Modified Assertion ---
+	// The original test only checked for the presence of the message body.
+	// This new assertion checks that the recipient is the one from the SMTP
+	// envelope (`RCPT TO`), not the one from the message header (`To:`).
 
-	// The google api client creates a multipart/related request.
-	// One part has the metadata (in JSON) and the other has the raw message.
-	// The JSON part refers to the raw part.
-	// We need to find the base64 encoded message in the body.
-	assert.Contains(t, bodyStr, encodedMsg, "request body should contain the base64url encoded message")
+	// The Google API client sends a JSON request containing the raw message.
+	// We need to unmarshal it to get the base64-encoded data.
+	var apiMsg gapi.Message
+	// The body may not be a direct JSON representation of gapi.Message,
+	// but rather a multipart message. We'll parse the raw message from it.
+	// A robust way is to find the `"raw": "..."` part in the JSON body.
+	// For this test, we can make a simplifying assumption that the body
+	// can be parsed into the Message struct. If not, we'd need a more
+	// complex multipart parser.
+	// Let's first try to unmarshal the whole body.
+	err = json.Unmarshal(receivedBodyBytes, &apiMsg)
+	if err != nil {
+		// If unmarshalling fails, it's likely a multipart body.
+		// We'll have to resort to string searching for the raw field,
+		// which is less robust but necessary for this test structure.
+		bodyStr := string(receivedBodyBytes)
+		// This is a simplified way to extract the base64 content.
+		// A real implementation would parse the multipart MIME message.
+		start := "{\"raw\":\""
+		end := "\"}"
+		if s := strings.Index(bodyStr, start); s != -1 {
+			if e := strings.LastIndex(bodyStr, end); e != -1 && e > s {
+				rawBase64 := bodyStr[s+len(start) : e]
+				// The Google client might use standard base64, not raw. Let's try both.
+				decodedBytes, decodeErr := base64.RawURLEncoding.DecodeString(rawBase64)
+				if decodeErr != nil {
+					decodedBytes, decodeErr = base64.StdEncoding.DecodeString(rawBase64)
+				}
+				require.NoError(t, decodeErr, "failed to decode base64 raw string from body")
+				apiMsg.Raw = base64.RawURLEncoding.EncodeToString(decodedBytes) // Re-encode with the one that works for the next step
+			}
+		}
+	}
+	require.NotEmpty(t, apiMsg.Raw, "could not extract raw message from request body")
+
+	// Decode the raw message from base64.
+	decodedMsg, err := base64.RawURLEncoding.DecodeString(apiMsg.Raw)
+	require.NoError(t, err, "failed to decode raw message")
+
+	// Assert that the decoded message contains the ENVELOPE recipient.
+	// This is the crucial part of the test. Due to the bug, the message
+	// will actually contain the HEADER recipient, and this assertion will fail.
+	expectedToHeader := fmt.Sprintf("To: %s", envelopeRecipient)
+	assert.Contains(t, string(decodedMsg), expectedToHeader,
+		"The 'To:' header in the relayed message should match the SMTP envelope recipient")
+	// --- End: Modified Assertion ---
 
 	// Check that the server goroutine hasn't exited with an error
 	select {
