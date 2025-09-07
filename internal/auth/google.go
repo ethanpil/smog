@@ -289,7 +289,7 @@ func RevokeToken(logger *slog.Logger, cfg *config.Config) error {
 	tokenPath := cfg.GoogleTokenPath
 	logger.Info("revoking token", "path", tokenPath)
 
-	// Overwrite with zeros
+	// Open the file for writing.
 	f, err := os.OpenFile(tokenPath, os.O_WRONLY, 0)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -298,18 +298,26 @@ func RevokeToken(logger *slog.Logger, cfg *config.Config) error {
 		}
 		return fmt.Errorf("failed to open token file for writing: %w", err)
 	}
-	defer f.Close()
 
+	// Overwrite with zeros before closing.
+	// We can't defer f.Close() because we need to close it before removing the file.
 	stat, err := f.Stat()
 	if err != nil {
+		f.Close() // Attempt to close the file even if stat fails.
 		return fmt.Errorf("failed to get token file info: %w", err)
 	}
 
 	if _, err := f.Write(make([]byte, stat.Size())); err != nil {
+		f.Close() // Attempt to close the file even if write fails.
 		return fmt.Errorf("failed to overwrite token file: %w", err)
 	}
 
-	// Delete the file
+	// Explicitly close the file before removing it.
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("failed to close token file: %w", err)
+	}
+
+	// Delete the file.
 	if err := os.Remove(tokenPath); err != nil {
 		return fmt.Errorf("failed to delete token file: %w", err)
 	}
