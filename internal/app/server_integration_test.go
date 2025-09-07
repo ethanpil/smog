@@ -66,7 +66,7 @@ func (m *mockGmailService) Send(ctx context.Context, token *oauth2.Token, rawEma
 	require.NoError(m.t, err)
 
 	// Base64url-encode the raw email, as the real client would do.
-	encodedEmail := base64.URLEncoding.EncodeToString(rawEmail)
+	encodedEmail := base64.RawURLEncoding.EncodeToString(rawEmail)
 	message := &gogmail.Message{
 		Raw: encodedEmail,
 	}
@@ -169,7 +169,7 @@ func TestEndToEndMessageRelay(t *testing.T) {
 	// The real gmail.Client double-encodes the message in a multipart body,
 	// so we check for the raw message content.
 	// The `Send` method in our mock service encodes it, so we need to find the encoded version.
-	encodedMsg := base64.URLEncoding.EncodeToString(msg)
+	encodedMsg := base64.RawURLEncoding.EncodeToString(msg)
 	bodyStr := string(receivedBodyBytes)
 
 	// The google api client creates a multipart/related request.
