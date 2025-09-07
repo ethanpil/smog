@@ -243,11 +243,11 @@ func LoadToken(logger *slog.Logger, cfg *config.Config) (*oauth2.Token, error) {
 
 // Retrieves a token from a local file.
 func tokenFromFile(logger *slog.Logger, file string) (*oauth2.Token, error) {
-	logger.Info("checking for token", "path", file)
+	logger.Debug("checking for token", "path", file)
 	f, err := os.Open(file)
 	if err != nil {
 		if os.IsNotExist(err) {
-			logger.Info("token file not found")
+			logger.Info("token file not found", "path", file)
 			return nil, nil // Return nil token and nil error
 		}
 		return nil, fmt.Errorf("failed to open token file: %w", err)
@@ -255,10 +255,12 @@ func tokenFromFile(logger *slog.Logger, file string) (*oauth2.Token, error) {
 	defer f.Close()
 
 	tok := &oauth2.Token{}
-	if err := json.NewDecoder(f).Decode(tok); err != nil {
-		return nil, fmt.Errorf("failed to decode token: %w", err)
+	err = json.NewDecoder(f).Decode(tok)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode token file: %w", err)
 	}
-	logger.Info("token file found")
+
+	logger.Info("token file found and successfully decoded", "path", file)
 	return tok, nil
 }
 
@@ -288,7 +290,11 @@ func saveToken(logger *slog.Logger, path string, token *oauth2.Token) error {
 	return json.NewEncoder(f).Encode(token)
 }
 
-// RevokeToken securely deletes the token file.
+// RevokeToken securely deletes the token file. It overwrites the file with zeros
+// to prevent recovery of the sensitive token data, then closes the file, and
+// finally removes it from the filesystem. This approach ensures that the file is
+// properly handled for secure deletion, particularly on systems like Windows
+// where a file must be closed before it can be removed.
 func RevokeToken(logger *slog.Logger, cfg *config.Config) error {
 	tokenPath := cfg.GoogleTokenPath
 	logger.Info("revoking token", "path", tokenPath)
