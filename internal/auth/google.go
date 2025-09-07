@@ -125,13 +125,16 @@ func getTokenFromBrowser(logger *slog.Logger, config *oauth2.Config) (*oauth2.To
 	logger.Debug("oauth callback listening", "url", config.RedirectURL)
 
 	// Setup a temporary HTTP server to handle the OAuth redirect
-	server := &http.Server{}
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	server := &http.Server{
+		Handler: mux,
+	}
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Get the authorization code from the query parameters
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			logger.Error("oauth callback received no code")
-			fmt.Fprintln(w, "Error: Authorization code not found in request.")
+			http.Error(w, "Error: Authorization code not found in request.", http.StatusBadRequest)
 			errChan <- fmt.Errorf("authorization code not found")
 			return
 		}
@@ -144,6 +147,7 @@ func getTokenFromBrowser(logger *slog.Logger, config *oauth2.Config) (*oauth2.To
 	// Start the server in a goroutine
 	go func() {
 		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
+			logger.Error("local http server failed", "err", err)
 			errChan <- fmt.Errorf("failed to start local server: %w", err)
 		}
 	}()
