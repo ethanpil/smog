@@ -130,11 +130,21 @@ func TestEndToEndMessageRelay(t *testing.T) {
 		serverErrChan <- Run(cfg, logger, mockService)
 	}()
 
-	// Give the server a moment to start up.
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the server to become available by polling the SMTP port.
+	smtpAddr := fmt.Sprintf("localhost:%d", cfg.SMTPPort)
+	var conn net.Conn
+	var err error
+	for i := 0; i < 20; i++ { // Retry for up to 2 seconds
+		conn, err = net.DialTimeout("tcp", smtpAddr, 100*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			break // Success
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	require.NoError(t, err, "failed to connect to SMTP server on %s after multiple retries", smtpAddr)
 
 	// 4. Use an SMTP client to send a message
-	smtpAddr := fmt.Sprintf("localhost:%d", cfg.SMTPPort)
 	auth := smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPassword, "localhost")
 
 	from := "sender@example.com"
@@ -144,7 +154,7 @@ func TestEndToEndMessageRelay(t *testing.T) {
 		"\r\n" +
 		"This is a test message body.\r\n")
 
-	err := smtp.SendMail(smtpAddr, auth, from, to, msg)
+	err = smtp.SendMail(smtpAddr, auth, from, to, msg)
 	require.NoError(t, err, "smtp.SendMail should succeed")
 
 	// 5. Assertions
