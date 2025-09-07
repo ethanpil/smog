@@ -9,7 +9,7 @@ import (
 	"os"
 )
 
-var defaultConfig = fmt.Sprintf(fmt.Sprintf(`
+var defaultConfig = fmt.Sprintf(`
 # smog configuration file
 # For more information, see: https://github.com/bodgit/smog
 
@@ -30,7 +30,7 @@ GoogleTokenPath = "%s"
 SMTPUser = "smog"
 
 # SMTPPassword: The password that SMTP clients must use.
-SMTPPassword = "%%s"
+SMTPPassword = "%s"
 
 # SMTPPort: The TCP port for the SMTP server to listen on.
 SMTPPort = 2525
@@ -53,4 +53,4 @@ MaxRecipients = 50
 
 # AllowInsecureAuth: Allow insecure authentication methods.
 AllowInsecureAuth = true
-`, filepath.Join(os.Getenv("ProgramData"), "smog", "credentials.json"), filepath.Join(os.Getenv("ProgramData"), "smog", "token.json")), DefaultSMTPPassword)
+`, filepath.Join(os.Getenv("ProgramData"), "smog", "credentials.json"), filepath.Join(os.Getenv("ProgramData"), "smog", "token.json"), DefaultSMTPPassword)
