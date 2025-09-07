@@ -45,7 +45,7 @@ func (c *Client) Send(ctx context.Context, token *oauth2.Token, rawEmail []byte)
 	}
 
 	// Base64url-encode the raw email
-	encodedEmail := base64.URLEncoding.EncodeToString(rawEmail)
+	encodedEmail := base64.RawURLEncoding.EncodeToString(rawEmail)
 
 	// Create a new message
 	message := &gapi.Message{
