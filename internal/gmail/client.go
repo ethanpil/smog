@@ -8,13 +8,13 @@ import (
 	"net/http"
 
 	"golang.org/x/oauth2"
-	"google.golang.org/api/gmail/v1"
+	gapi "google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
 )
 
 // Service is the interface for the Gmail client.
 type Service interface {
-	Send(ctx context.Context, token *oauth2.Token, rawEmail []byte) (*gmail.Message, error)
+	Send(ctx context.Context, token *oauth2.Token, rawEmail []byte) (*gapi.Message, error)
 }
 
 // Client is a wrapper around the Gmail API client.
@@ -32,11 +32,11 @@ func New(logger *slog.Logger, client *http.Client) Service {
 }
 
 // Send sends a raw email buffer to the Gmail API.
-func (c *Client) Send(ctx context.Context, token *oauth2.Token, rawEmail []byte) (*gmail.Message, error) {
+func (c *Client) Send(ctx context.Context, token *oauth2.Token, rawEmail []byte) (*gapi.Message, error) {
 	c.logger.Info("sending email via gmail api")
 
 	// Create a new Gmail service using the provided token
-	srv, err := gmail.NewService(ctx,
+	srv, err := gapi.NewService(ctx,
 		option.WithHTTPClient(c.client),
 		option.WithTokenSource(oauth2.StaticTokenSource(token)),
 	)
@@ -48,7 +48,7 @@ func (c *Client) Send(ctx context.Context, token *oauth2.Token, rawEmail []byte)
 	encodedEmail := base64.URLEncoding.EncodeToString(rawEmail)
 
 	// Create a new message
-	message := &gmail.Message{
+	message := &gapi.Message{
 		Raw: encodedEmail,
 	}
 
