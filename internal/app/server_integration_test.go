@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
-	gogmail "google.golang.org/api/gmail/v1"
+	gapi "google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
 )
 
@@ -59,15 +59,15 @@ func newMockGmailService(t *testing.T, mockGServer *httptest.Server) gmail.Servi
 // configured to point to the mock server's URL, then calls the real Send method
 // on that temporary service. This avoids having to re-implement the base64 encoding
 // and API call structure.
-func (m *mockGmailService) Send(ctx context.Context, token *oauth2.Token, rawEmail []byte) (*gogmail.Message, error) {
+func (m *mockGmailService) Send(ctx context.Context, token *oauth2.Token, rawEmail []byte) (*gapi.Message, error) {
 	// Create a real gmail service client, but force it to use our mock server's URL
 	// and http client. This is the most reliable way to test the real client's behavior.
-	realGmailService, err := gogmail.NewService(ctx, option.WithHTTPClient(m.httpClient), option.WithEndpoint(m.mockGServer.URL))
+	realGmailService, err := gapi.NewService(ctx, option.WithHTTPClient(m.httpClient), option.WithEndpoint(m.mockGServer.URL))
 	require.NoError(m.t, err)
 
 	// Base64url-encode the raw email, as the real client would do.
 	encodedEmail := base64.RawURLEncoding.EncodeToString(rawEmail)
-	message := &gogmail.Message{
+	message := &gapi.Message{
 		Raw: encodedEmail,
 	}
 
@@ -96,7 +96,7 @@ func TestEndToEndMessageRelay(t *testing.T) {
 		require.NoError(t, err, "failed to read request body")
 
 		w.Header().Set("Content-Type", "application/json")
-		err = json.NewEncoder(w).Encode(&gogmail.Message{Id: "test-message-id"})
+		err = json.NewEncoder(w).Encode(&gapi.Message{Id: "test-message-id"})
 		require.NoError(t, err, "failed to encode google api response")
 	}))
 	defer mockGoogleAPIServer.Close()
