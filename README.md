@@ -6,6 +6,8 @@ smog acts as a local SMTP server that accepts authenticated email submissions an
 
 Before first use, the administrator must run `smog auth login` to authorize the application with Google. The `GoogleCredentialsPath` configuration option must be set to the path of the `credentials.json` file downloaded from the Google Cloud Console.
 
+**Important Note on Bcc Handling:** Due to limitations in the Gmail API when sending raw email data, this tool cannot preserve the privacy of `Bcc` (Blind Carbon Copy) recipients. All recipients from the `RCPT TO` SMTP command, including those intended for `Bcc`, will be visible in the final email's `To:` header.
+
 ## USAGE
      smog [global flags] [command]
 

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/mail"
 	"net/smtp"
 	"os"
 	"strings"
@@ -56,18 +58,32 @@ func newMockGmailService(t *testing.T, mockGServer *httptest.Server) gmail.Servi
 	}
 }
 
-// Send overrides the real Send method. It creates a temporary, real gmail.Service
-// configured to point to the mock server's URL, then calls the real Send method
-// on that temporary service. This avoids having to re-implement the base64 encoding
-// and API call structure.
-func (m *mockGmailService) Send(ctx context.Context, token *oauth2.Token, rawEmail []byte) (*gapi.Message, error) {
+// Send overrides the real Send method. It mimics the new behavior of the real
+// gmail.Client by performing header replacement before sending the message to the
+// underlying mock google API http server.
+func (m *mockGmailService) Send(ctx context.Context, token *oauth2.Token, recipients []string, rawEmail []byte) (*gapi.Message, error) {
+	// Mimic the header replacement logic from the actual client.
+	emailReader := bytes.NewReader(rawEmail)
+	msg, err := mail.ReadMessage(emailReader)
+	require.NoError(m.t, err, "mock send: failed to parse raw email")
+
+	msg.Header["To"] = []string{strings.Join(recipients, ", ")}
+
+	var newEmailBuffer bytes.Buffer
+	for k, v := range msg.Header {
+		newEmailBuffer.WriteString(fmt.Sprintf("%s: %s\r\n", k, strings.Join(v, ", ")))
+	}
+	newEmailBuffer.WriteString("\r\n")
+	_, err = io.Copy(&newEmailBuffer, msg.Body)
+	require.NoError(m.t, err, "mock send: failed to copy body")
+
 	// Create a real gmail service client, but force it to use our mock server's URL
 	// and http client. This is the most reliable way to test the real client's behavior.
 	realGmailService, err := gapi.NewService(ctx, option.WithHTTPClient(m.httpClient), option.WithEndpoint(m.mockGServer.URL))
 	require.NoError(m.t, err)
 
-	// Base64url-encode the raw email, as the real client would do.
-	encodedEmail := base64.RawURLEncoding.EncodeToString(rawEmail)
+	// Base64url-encode the *modified* email.
+	encodedEmail := base64.RawURLEncoding.EncodeToString(newEmailBuffer.Bytes())
 	message := &gapi.Message{
 		Raw: encodedEmail,
 	}
