@@ -113,11 +113,8 @@ GoogleCredentialsPath = "/etc/smog/credentials.json"
 		assert.Equal(t, 10, config.ReadTimeout)
 		assert.Equal(t, 10, config.WriteTimeout)
 		assert.Equal(t, 50, config.MaxRecipients)
-		// The default for AllowInsecureAuth is the zero value, which is false.
-		// The default config files set it to true, but if the value is not present at all,
-		// it will be false. The validation logic I added only sets defaults for numeric values <= 0.
-		// This is acceptable.
-		assert.Equal(t, false, config.AllowInsecureAuth)
+		// Check that AllowInsecureAuth defaults to true when not specified.
+		assert.Equal(t, true, config.AllowInsecureAuth)
 	})
 
 	t.Run("NonExistentConfigFile", func(t *testing.T) {

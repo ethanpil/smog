@@ -123,6 +123,12 @@ func LoadConfig(path string) (config Config, err error) {
 		config.MaxRecipients = 50
 	}
 
+	// If AllowInsecureAuth is not set, default it to true for consistency
+	// with the default configuration files.
+	if !viper.IsSet("AllowInsecureAuth") {
+		config.AllowInsecureAuth = true
+	}
+
 	return config, nil
 }
 
