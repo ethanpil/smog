@@ -148,7 +148,7 @@ func (s *Session) Data(r io.Reader) error {
 	s.log.Info("message data received, preparing to send via gmail", "from", s.from, "to", s.to)
 
 	ctx := context.Background()
-	sentMsg, err := s.gmailClient.Send(ctx, s.token, s.data.Bytes())
+	sentMsg, err := s.gmailClient.Send(ctx, s.token, s.to, s.data.Bytes())
 	if err != nil {
 		s.log.Error("failed to send email via gmail", "err", err)
 		// Return more specific errors based on error type

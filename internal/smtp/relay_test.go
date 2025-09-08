@@ -16,8 +16,16 @@ import (
 func TestSession_MailRcptData(t *testing.T) {
 	// 1. Setup
 	mockGmail := &gmail.MockService{
-		SendFunc: func(ctx context.Context, token *oauth2.Token, rawEmail []byte) (*gapi.Message, error) {
-			// In a real test, you might inspect the rawEmail content
+		SendFunc: func(ctx context.Context, token *oauth2.Token, recipients []string, rawEmail []byte) (*gapi.Message, error) {
+			if len(recipients) != 2 {
+				t.Errorf("expected 2 recipients, got %d", len(recipients))
+			}
+			if recipients[0] != "recipient1@example.com" {
+				t.Errorf("expected recipient1 to be 'recipient1@example.com', got '%s'", recipients[0])
+			}
+			if recipients[1] != "recipient2@example.com" {
+				t.Errorf("expected recipient2 to be 'recipient2@example.com', got '%s'", recipients[1])
+			}
 			return &gapi.Message{Id: "test-message-id"}, nil
 		},
 	}
