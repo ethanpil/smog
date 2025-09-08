@@ -18,7 +18,7 @@ import (
 
 // Service is the interface for the Gmail client.
 type Service interface {
-	Send(ctx context.Context, token *oauth2.Token, recipients []string, rawEmail []byte) (*gapi.Message, error)
+	Send(ctx context.Context, token *oauth2.Token, recipients []string, rawEmail io.Reader) (*gapi.Message, error)
 }
 
 // Client is a wrapper around the Gmail API client.
@@ -35,11 +35,10 @@ func New(logger *slog.Logger, client *http.Client) Service {
 	}
 }
 
-// replaceToHeader parses a raw email, replaces its 'To' header with the given
-// recipients, and returns the reconstructed raw email as bytes.
-func replaceToHeader(logger *slog.Logger, recipients []string, rawEmail []byte) ([]byte, error) {
-	emailReader := bytes.NewReader(rawEmail)
-	msg, err := mail.ReadMessage(emailReader)
+// replaceToHeader parses a raw email from a reader, replaces its 'To' header
+// with the given recipients, and returns the reconstructed raw email as bytes.
+func replaceToHeader(logger *slog.Logger, recipients []string, rawEmail io.Reader) ([]byte, error) {
+	msg, err := mail.ReadMessage(rawEmail)
 	if err != nil {
 		logger.Error("failed to parse raw email for header replacement", "error", err)
 		return nil, fmt.Errorf("failed to parse raw email: %w", err)
@@ -49,13 +48,14 @@ func replaceToHeader(logger *slog.Logger, recipients []string, rawEmail []byte) 
 	if len(recipients) > 0 {
 		msg.Header["To"] = []string{strings.Join(recipients, ", ")}
 	} else {
-		// If there are no recipients, should we remove the header or leave it?
-		// For now, let's remove it to avoid sending to the wrong person.
+		// If there are no recipients, remove the 'To' header to avoid ambiguity.
 		delete(msg.Header, "To")
 	}
 
 	var newEmailBuffer bytes.Buffer
 	for k, v := range msg.Header {
+		// TODO: This is a simplified header writer. A more robust implementation
+		// would handle multi-line headers and proper encoding.
 		newEmailBuffer.WriteString(fmt.Sprintf("%s: %s\r\n", k, strings.Join(v, ", ")))
 	}
 	newEmailBuffer.WriteString("\r\n")
@@ -68,11 +68,12 @@ func replaceToHeader(logger *slog.Logger, recipients []string, rawEmail []byte) 
 	return newEmailBuffer.Bytes(), nil
 }
 
-// Send sends a raw email buffer to the Gmail API. It parses the raw email,
+// Send sends a raw email stream to the Gmail API. It parses the raw email,
 // replaces the "To" header with the provided recipients, and then sends it.
-func (c *Client) Send(ctx context.Context, token *oauth2.Token, recipients []string, rawEmail []byte) (*gapi.Message, error) {
+func (c *Client) Send(ctx context.Context, token *oauth2.Token, recipients []string, rawEmail io.Reader) (*gapi.Message, error) {
 	c.logger.Info("sending email via gmail api", "recipients", recipients)
 
+	// The `replaceToHeader` function now reads from the stream and returns bytes.
 	modifiedEmail, err := replaceToHeader(c.logger, recipients, rawEmail)
 	if err != nil {
 		return nil, err // Error is already logged in replaceToHeader
