@@ -31,6 +31,7 @@ func New(level, path string, verbose bool) *slog.Logger {
 	}
 
 	var writers []io.Writer
+	fileLogFailed := false
 
 	// Add file writer if a path is specified.
 	if path != "" {
@@ -38,6 +39,7 @@ func New(level, path string, verbose bool) *slog.Logger {
 		if err == nil {
 			writers = append(writers, file)
 		} else {
+			fileLogFailed = true
 			// Fallback to stderr for the error message, as the logger isn't fully set up.
 			transientLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 			transientLogger.Error("failed to open log file", "path", path, "err", err)
@@ -45,8 +47,8 @@ func New(level, path string, verbose bool) *slog.Logger {
 		}
 	}
 
-	// Add console writer for verbose mode or if no log path is set.
-	if verbose || path == "" {
+	// Add console writer for verbose mode, if no log path is set, or if file logging failed.
+	if verbose || path == "" || fileLogFailed {
 		writers = append(writers, os.Stdout)
 	}
 
