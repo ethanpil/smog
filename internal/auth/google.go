@@ -299,8 +299,8 @@ func RevokeToken(logger *slog.Logger, cfg *config.Config) error {
 	tokenPath := cfg.GoogleTokenPath
 	logger.Info("revoking token", "path", tokenPath)
 
-	// Open the file for writing.
-	f, err := os.OpenFile(tokenPath, os.O_WRONLY, 0)
+	// Open the file for reading and writing to avoid truncation on open.
+	f, err := os.OpenFile(tokenPath, os.O_RDWR, 0)
 	if err != nil {
 		if os.IsNotExist(err) {
 			logger.Info("token file not found, nothing to revoke")
