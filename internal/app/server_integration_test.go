@@ -61,10 +61,10 @@ func newMockGmailService(t *testing.T, mockGServer *httptest.Server) gmail.Servi
 // Send overrides the real Send method. It mimics the new behavior of the real
 // gmail.Client by performing header replacement before sending the message to the
 // underlying mock google API http server.
-func (m *mockGmailService) Send(ctx context.Context, token *oauth2.Token, recipients []string, rawEmail []byte) (*gapi.Message, error) {
+func (m *mockGmailService) Send(ctx context.Context, token *oauth2.Token, recipients []string, rawEmail io.Reader) (*gapi.Message, error) {
 	// Mimic the header replacement logic from the actual client.
-	emailReader := bytes.NewReader(rawEmail)
-	msg, err := mail.ReadMessage(emailReader)
+	// The reader is passed directly, no need to create a new one.
+	msg, err := mail.ReadMessage(rawEmail)
 	require.NoError(m.t, err, "mock send: failed to parse raw email")
 
 	msg.Header["To"] = []string{strings.Join(recipients, ", ")}

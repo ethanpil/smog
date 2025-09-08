@@ -1,13 +1,13 @@
 package smtp
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/emersion/go-sasl"
@@ -65,14 +65,15 @@ func (be *Backend) newSession(conn net.Conn) (smtp.Session, error) {
 
 // A Session is returned after EHLO.
 type Session struct {
-	log         *slog.Logger
-	cfg         *config.Config
-	gmailClient gmail.Service
-	token       *oauth2.Token
-	clientIP    string
-	from        string
-	to          []string
-	data        bytes.Buffer
+	log          *slog.Logger
+	cfg          *config.Config
+	gmailClient  gmail.Service
+	token        *oauth2.Token
+	clientIP     string
+	from         string
+	to           []string
+	dataFilePath string // Path to the temporary file holding the message data
+	dataSize     int64  // Size of the message data
 }
 
 // AuthMechanisms returns a slice of available auth mechanisms to satisfy the
@@ -116,42 +117,73 @@ func (s *Session) Rcpt(to string, opts *smtp.RcptOptions) error {
 func (s *Session) Data(r io.Reader) error {
 	s.log.Debug("DATA received")
 
-	// Enforce message size limit.
+	// Create a temporary file to store the message data.
+	tmpFile, err := os.CreateTemp("", "smog-data-")
+	if err != nil {
+		s.log.Error("failed to create temporary file", "err", err)
+		return &smtp.SMTPError{Code: 451, Message: "Temporary server error"}
+	}
+	s.dataFilePath = tmpFile.Name()
+	// No need to defer removal here because Reset() will handle it.
+
+	var reader io.Reader = r
+	var rawLimit int64
+
 	if s.cfg.MessageSizeLimitMB > 0 {
 		limitBytes := int64(s.cfg.MessageSizeLimitMB) * 1024 * 1024
-		// Use a LimitReader to avoid reading the entire message into memory if it's too large.
-		// We read up to limitBytes + 1 to see if the message is over the limit.
-		lr := io.LimitReader(r, limitBytes+1)
-		if _, err := io.Copy(&s.data, lr); err != nil {
-			s.log.Error("error reading data stream", "err", err)
-			return err
-		}
+		// The message size limit is for the base64 encoded message.
+		// We calculate the approximate raw size limit. The base64-encoded size is
+		// roughly 4/3 of the original size.
+		rawLimit = (limitBytes * 3) / 4
+		// We read up to rawLimit + 1 to detect if the message is too large.
+		reader = io.LimitReader(r, rawLimit+1)
+	}
 
-		if int64(s.data.Len()) > limitBytes {
-			s.log.Warn("message rejected: size exceeds limit",
-				"size_mb", float64(s.data.Len())/(1024*1024),
-				"limit_mb", s.cfg.MessageSizeLimitMB)
-			return &smtp.SMTPError{
-				Code:    552,
-				Message: fmt.Sprintf("Message size %.2f MB exceeds limit of %d MB",
-					float64(s.data.Len())/(1024*1024), s.cfg.MessageSizeLimitMB),
-			}
-		}
-	} else {
-		// If no limit is set, read the whole thing.
-		if _, err := io.Copy(&s.data, r); err != nil {
-			s.log.Error("error reading data stream", "err", err)
-			return err
+	// Copy the data from the reader to the temporary file.
+	s.dataSize, err = io.Copy(tmpFile, reader)
+	if err != nil {
+		tmpFile.Close()
+		s.log.Error("error reading data stream", "err", err)
+		return &smtp.SMTPError{Code: 451, Message: "Error reading message data"}
+	}
+
+	// Check if the message size exceeds the raw limit.
+	if rawLimit > 0 && s.dataSize > rawLimit {
+		tmpFile.Close()
+		s.log.Warn("message rejected: size exceeds limit",
+			"raw_size_bytes", s.dataSize,
+			"approx_encoded_size_mb", float64(s.dataSize*4/3)/(1024*1024),
+			"limit_mb", s.cfg.MessageSizeLimitMB)
+		return &smtp.SMTPError{
+			Code: 552,
+			Message: fmt.Sprintf(
+				"Message raw size %.2f MB is too large. The limit of %d MB applies to the base64-encoded message.",
+				float64(s.dataSize)/(1024*1024),
+				s.cfg.MessageSizeLimitMB,
+			),
 		}
 	}
 
-	s.log.Info("message data received, preparing to send via gmail", "from", s.from, "to", s.to)
+	// Close the file handle we were using for writing.
+	if err := tmpFile.Close(); err != nil {
+		s.log.Error("failed to close temporary file after write", "err", err)
+		return &smtp.SMTPError{Code: 451, Message: "Temporary server error"}
+	}
+
+	// Now, open the same temporary file for reading.
+	readFile, err := os.Open(s.dataFilePath)
+	if err != nil {
+		s.log.Error("failed to open temporary file for reading", "err", err)
+		return &smtp.SMTPError{Code: 451, Message: "Temporary server error"}
+	}
+	defer readFile.Close()
+
+	s.log.Info("message data received, preparing to send via gmail", "from", s.from, "to", s.to, "size_bytes", s.dataSize)
 
 	ctx := context.Background()
-	sentMsg, err := s.gmailClient.Send(ctx, s.token, s.to, s.data.Bytes())
+	sentMsg, err := s.gmailClient.Send(ctx, s.token, s.to, readFile)
 	if err != nil {
 		s.log.Error("failed to send email via gmail", "err", err)
-		// Return more specific errors based on error type
 		if strings.Contains(err.Error(), "quota") {
 			return &smtp.SMTPError{Code: 452, Message: "Service temporarily unavailable due to quota limits"}
 		}
@@ -171,9 +203,15 @@ func (s *Session) Data(r io.Reader) error {
 }
 
 func (s *Session) Reset() {
+	if s.dataFilePath != "" {
+		if err := os.Remove(s.dataFilePath); err != nil {
+			s.log.Warn("failed to remove temporary data file", "path", s.dataFilePath, "err", err)
+		}
+	}
 	s.from = ""
 	s.to = s.to[:0] // Reuse slice capacity
-	s.data.Reset()
+	s.dataFilePath = ""
+	s.dataSize = 0
 }
 
 func (s *Session) Logout() error {

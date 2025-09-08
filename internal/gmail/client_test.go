@@ -71,7 +71,7 @@ func TestReplaceToHeader(t *testing.T) {
 			rawEmail.WriteString("This is the body.")
 
 			// 2. Call the function
-			modifiedEmailBytes, err := replaceToHeader(logger, tc.newRecipients, []byte(rawEmail.String()))
+			modifiedEmailBytes, err := replaceToHeader(logger, tc.newRecipients, strings.NewReader(rawEmail.String()))
 			require.NoError(t, err)
 
 			// 3. Parse the result and assert
