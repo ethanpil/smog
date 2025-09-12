@@ -12,7 +12,7 @@ Before first use, the administrator must run `smog auth login` to authorize the 
      smog [global flags] [command]
 
 ## GLOBAL FLAGS
-     -c, --config <path> - Specify a custom path to the smog.conf configuration file.
+     -c, --config <path> - Specify a custom path to the smog.toml configuration file.
 
      -v, --verbose
            Enable verbose logging output to the console.
@@ -34,7 +34,7 @@ Before first use, the administrator must run `smog auth login` to authorize the 
 
      config
            Manages the configuration file.
-           create    Creates a new, default smog.conf file in the
+           create    Creates a new, default smog.toml file in the
                      platform-appropriate default location.
            show      Displays the currently loaded configuration.
 
@@ -45,18 +45,18 @@ Before first use, the administrator must run `smog auth login` to authorize the 
            Displays this help message.
 
 ## FILES
-     smog.conf is the default configuration file. It is searched for in the
+     smog.toml is the default configuration file. It is searched for in the
      current directory, and in the following platform-specific locations:
 
      Linux
-           /etc/smog/smog.conf
-           /var/lib/smog/smog.conf
+           /etc/smog/smog.toml
+           /var/lib/smog/smog.toml
 
      macOS
-           /Library/Application Support/smog/smog.conf
+           /Library/Application Support/smog/smog.toml
 
      Windows
-           C:\ProgramData\smog\smog.conf
+           C:\ProgramData\smog\smog.toml
 
 ## EXAMPLES
      Run the SMTP server with the default configuration:
@@ -66,7 +66,7 @@ Before first use, the administrator must run `smog auth login` to authorize the 
            $ smog auth login
 
      Run the server using a custom configuration file and verbose output:
-           $ smog -v -c /etc/custom/smog.conf serve
+           $ smog -v -c /etc/custom/smog.toml serve
 
 ## LICENSE
     Copyright (C) 2025 Ethan Piliavin

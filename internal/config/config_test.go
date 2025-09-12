@@ -3,32 +3,23 @@ package config
 import (
 	"log/slog"
 	"os"
-	"runtime"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCreate(t *testing.T) {
-	// Clean up any old config file before the test
-	os.Remove("smog.conf")
-
 	// Create a temporary directory for the test
-	tmpDir, err := os.MkdirTemp("", "smog-test")
+	tmpDir, err := os.MkdirTemp("", "smog-test-")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Set the appropriate environment variable for the OS
-	switch runtime.GOOS {
-	case "windows":
-		os.Setenv("ProgramData", tmpDir)
-	case "linux":
-		// The config path is hardcoded for linux
-	case "darwin":
-		// The config path is hardcoded for darwin
-	}
+	// Override the default config directory for the test
+	defaultConfigDirOverride = tmpDir
+	defer func() { defaultConfigDirOverride = "" }() // Reset override after test
 
 	// Call the Create function
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -36,13 +27,11 @@ func TestCreate(t *testing.T) {
 		t.Fatalf("Create() failed: %v", err)
 	}
 
-	// Verify the config file was created
-	if _, err := os.Stat("smog.conf"); os.IsNotExist(err) {
-		t.Errorf("config file was not created: smog.conf")
+	// Verify the config file was created in the temporary directory
+	expectedFile := filepath.Join(tmpDir, "smog.toml")
+	if _, err := os.Stat(expectedFile); os.IsNotExist(err) {
+		t.Errorf("config file was not created at %s", expectedFile)
 	}
-
-	// Clean up the created file
-	os.Remove("smog.conf")
 }
 
 func TestLoadConfig(t *testing.T) {
@@ -97,7 +86,7 @@ AllowInsecureAuth = false
 		content := `
 GoogleCredentialsPath = "/etc/smog/credentials.json"
 `
-		tmpfile, err := os.CreateTemp("", "smog.conf")
+		tmpfile, err := os.CreateTemp("", "smog.toml")
 		assert.NoError(t, err)
 		defer os.Remove(tmpfile.Name())
 
@@ -124,7 +113,7 @@ GoogleCredentialsPath = "/etc/smog/credentials.json"
 
 	t.Run("MalformedConfigFile", func(t *testing.T) {
 		content := `this is not valid toml`
-		tmpfile, err := os.CreateTemp("", "smog.conf")
+		tmpfile, err := os.CreateTemp("", "smog.toml")
 		assert.NoError(t, err)
 		defer os.Remove(tmpfile.Name())
 
@@ -150,7 +139,7 @@ LogLevel = "FileLevel"
 SMTPPort = 1234
 AllowedSubnets = ["3.3.3.3"]
 `
-		tmpfile, err := os.CreateTemp("", "smog.conf")
+		tmpfile, err := os.CreateTemp("", "smog.toml")
 		assert.NoError(t, err)
 		defer os.Remove(tmpfile.Name())
 

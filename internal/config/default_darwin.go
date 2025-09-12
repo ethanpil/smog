@@ -6,29 +6,37 @@ package config
 import "fmt"
 
 var defaultConfig = fmt.Sprintf(`
-# smog configuration file
-# For more information, see: https://github.com/bodgit/smog
+# smog - SMTP to Gmail Relay Configuration File
 
+# --- Logging Settings ---
 # LogLevel: Set the detail level for logs. Options: "Disabled", "Minimal", "Verbose".
 LogLevel = "Minimal"
 
-# LogPath: Path to the log file. Platform-specific defaults are used if empty.
-# Example: /Library/Logs/smog/smog.log
+# LogPath: Path to the log file. If empty, logs are written to platform-specific locations.
+# macOS: ~/Library/Logs/smog.log
 LogPath = ""
 
+
+# --- Google API Settings ---
 # GoogleCredentialsPath: Absolute path to the credentials.json file downloaded from Google Cloud.
+# This is required for the initial authorization.
 GoogleCredentialsPath = "/Library/Application Support/smog/credentials.json"
 
 # GoogleTokenPath: Path to store the generated OAuth2 token.
-GoogleTokenPath = "/Library/Application Support/smog/token.json"
+# If left empty, it defaults to a path in the user's config directory (e.g., ~/Library/Application Support/smog/token.json).
+GoogleTokenPath = ""
 
+
+# --- SMTP Server Settings ---
 # SMTPUser: The username that SMTP clients must use to authenticate.
 SMTPUser = "smog"
 
 # SMTPPassword: The password that SMTP clients must use.
+# IMPORTANT: Change this from the default value before running!
 SMTPPassword = "%s"
 
 # SMTPPort: The TCP port for the SMTP server to listen on.
+# Port 25 may require root privileges. Use a higher port like 587 or 2525.
 SMTPPort = 2525
 
 # MessageSizeLimitMB: The maximum email size (in Megabytes) to accept.
@@ -38,15 +46,21 @@ MessageSizeLimitMB = 10
 # Example: AllowedSubnets = ["192.168.1.0/24", "127.0.0.1"]
 AllowedSubnets = []
 
-# ReadTimeout: The maximum duration in seconds for reading the entire request.
+
+# --- Advanced SMTP Settings ---
+# ReadTimeout: The maximum duration in seconds for reading an entire SMTP request.
+# Helps prevent slow client attacks (e.g., Slowloris).
 ReadTimeout = 10
 
-# WriteTimeout: The maximum duration in seconds for writing the response.
+# WriteTimeout: The maximum duration in seconds for writing an entire SMTP response.
 WriteTimeout = 10
 
-# MaxRecipients: The maximum number of recipients for a single email.
+# MaxRecipients: The maximum number of recipients allowed for a single email.
+# The server will reject messages with more recipients than this value.
 MaxRecipients = 50
 
-# AllowInsecureAuth: Allow insecure authentication methods.
+# AllowInsecureAuth: Allow insecure authentication methods like AUTH PLAIN over
+# non-TLS connections. This is not recommended and should only be enabled for
+# legacy clients that do not support STARTTLS.
 AllowInsecureAuth = true
 `, DefaultSMTPPassword)
