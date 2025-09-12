@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -136,6 +137,37 @@ var createCmd = &cobra.Command{
 	},
 }
 
+var showCmd = &cobra.Command{
+	Use:   "show",
+	Short: "displays the currently loaded configuration",
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg, err := config.LoadConfig(configPath)
+		if err != nil {
+			fmt.Printf("Error: failed to load configuration: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Marshal the config to JSON for pretty printing
+		jsonOutput, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			fmt.Printf("Error: failed to display configuration: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println(string(jsonOutput))
+	},
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "prints the version of smog",
+	Run: func(cmd *cobra.Command, args []string) {
+		// This is a static version for now.
+		// In a real-world scenario, this would be injected at build time.
+		fmt.Println("smog version 0.1.0")
+	},
+}
+
 func init() {
 	// Add global flags
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "", "Path to configuration file")
@@ -146,9 +178,11 @@ func init() {
 	authCmd.AddCommand(loginCmd)
 	authCmd.AddCommand(revokeCmd)
 	configCmd.AddCommand(createCmd)
+	configCmd.AddCommand(showCmd)
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(versionCmd)
 }
 
 func main() {

@@ -132,14 +132,48 @@ func LoadConfig(path string) (config Config, err error) {
 	return config, nil
 }
 
-// Create creates a default config file.
+// defaultConfigDirOverride is used for testing to override the default config directory.
+var defaultConfigDirOverride string
+
+// getDefaultConfigDir returns the platform-specific default directory for the config file.
+func getDefaultConfigDir() string {
+	if defaultConfigDirOverride != "" {
+		return defaultConfigDirOverride
+	}
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(os.Getenv("ProgramData"), "smog")
+	case "linux":
+		return "/etc/smog" // System-wide configuration
+	case "darwin":
+		return "/Library/Application Support/smog"
+	default:
+		// Fallback for other systems (e.g., BSD)
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "." // Fallback to current directory if home is not available
+		}
+		return filepath.Join(home, ".config", "smog")
+	}
+}
+
+// Create creates a default config file in the platform-specific default location.
 func Create(logger *slog.Logger) error {
-	configFile := "smog.conf"
+	configDir := getDefaultConfigDir()
+	configFile := filepath.Join(configDir, "smog.toml")
+
+	// Create the directory if it doesn't exist.
+	// This is important for first-time setup.
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		logger.Error("failed to create config directory", "path", configDir, "err", err)
+		return fmt.Errorf("failed to create config directory %s: %w", configDir, err)
+	}
+
 	if _, err := os.Stat(configFile); err == nil {
-		logger.Warn("config file already exists", "configFile", configFile)
+		logger.Warn("config file already exists", "path", configFile)
 		return fmt.Errorf("config file already exists: %s", configFile)
 	}
 
-	logger.Debug("writing default config file", "configFile", configFile)
+	logger.Info("writing default config file", "path", configFile)
 	return os.WriteFile(configFile, []byte(defaultConfig), 0644)
 }
